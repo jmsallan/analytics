@@ -1,0 +1,196 @@
+---
+title: "ggplot2"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**ggplot2** is a system for creating graphics based on The Grammar of Graphics: 
+
+- Provide the data.
+- tell ggplot2 how to map variables to aesthetics.
+- tell what graphical primitives to use.
+
+To illustrate how can we create plots with ggplot, we will use the nycflights13 data. We will also load some other packages to handle data:
+
+```{r, message=FALSE}
+library(dplyr)
+library(data.table)
+library(ggplot2)
+library(nycflights13)
+```
+
+# The data
+
+We will analyze depart and arrival delays frow airports in New York City in 2014. Our data looks like:
+
+```{r}
+flights
+names(flights)
+```
+
+We can be interested obtaining the following variables for every hour (that is, for every unique `year`, `month`, `day` and `hour`) and every `origin` (as we have three diferent origin airports in this database):
+
+- Average departure delay `av_dep`.
+- Average arrival delay `av_arr`.
+- The number of flights `traff`.
+
+We can do that using `data.table`:
+
+```{r}
+flights.dt <- as.data.table(flights)
+av.delays.dt <- flights.dt[!is.na(dep_delay) & !is.na(arr_delay) , .(av_dep=mean(dep_delay), av_arr=mean(arr_delay), traffic=.N), by=  .(year, month, day, hour, origin)]
+```
+
+... or using `dplyr`:
+
+```{r}
+av.delays <- flights %>% filter(!is.na(dep_delay) & !is.na(arr_delay)) %>% group_by(year, month, day, hour, origin) %>% summarise(av_dep=mean(dep_delay), av_arr=mean(arr_delay), traffic=n())
+```
+
+```{r}
+av.delays.dt
+av.delays
+```
+
+# A ggplot graphic
+
+To obtain a **ggplot** graph we need:
+
+- to pass the data and map the aesthetics with the **ggplot** function
+- to tell the primitives to use.
+
+As we will see, each primitive is associated to an aesthetic.
+
+Let's make a density plot of the arrival delay:
+
+
+```{r}
+ggplot(av.delays.dt, aes(av_arr)) + geom_density()
+```
+
+We can make the same plot, with a lines in blue and density fill in green:
+
+```{r}
+ggplot(av.delays.dt, aes(av_arr)) + geom_density(color="blue", fill="green")
+```
+
+with a different theme:
+
+```{r}
+ggplot(av.delays.dt, aes(av_arr)) + geom_density(color="blue", fill="green") + theme_bw()
+```
+
+with a larger font size:
+
+```{r}
+ggplot(av.delays.dt, aes(av_arr)) + geom_density(color="blue", fill="green") + theme_bw(base_size = 14)
+```
+
+Note that we can use a `data.table` as input of a ggplot graphic.
+
+# One variable
+
+## Barplots
+
+We can count how many elements are in each category with a barplot.Here we can count how many flights are flown by each carrier. To do so we use the original dataset:
+
+```{r}
+ggplot(flights, aes(carrier)) + geom_bar()
+```
+
+Note that the easthetic is a categorical variable, and that we count how many elements there are to make the barplot.
+
+Perhaps we can be interested in knowing how much flights sends each airline. To do so we put a color in the aesthetic equal to the `origin` variable. Then we plot the results for each category in a different color:
+
+```{r}
+ggplot(flights, aes(carrier, fill=origin)) + geom_bar()
+```
+
+We can have alternative presentations:
+
+```{r}
+ggplot(flights, aes(carrier, fill=origin)) + geom_bar(position = "dodge")
+ggplot(flights, aes(carrier, fill=origin)) + geom_bar(position = "fill")
+```
+
+
+## Histograms
+
+In addition to density plots, we can make histograms:
+
+```{r}
+ggplot(av.delays.dt, aes(av_dep)) + geom_histogram()
+```
+
+# Discrete variable, continuous variable
+
+We can evaluate a continuous variable, say `av_arr` as a function of a categorical variable, the `origin` airport.
+
+## Barplots
+
+For instance, we can evaluate the traffic of each origin:
+
+```{r}
+ggplot(av.delays.dt, aes(origin, traffic)) + geom_bar(stat = "identity")
+```
+
+## Boxplot and violin plots
+
+For variables like `av_arr` a boxplot can be more useful:
+
+```{r}
+ggplot(av.delays.dt, aes(origin, av_arr)) + geom_boxplot()
+```
+
+...or perhaps:
+
+```{r}
+ggplot(av.delays.dt, aes(origin, av_arr)) + geom_violin()
+```
+
+looks nicer this way:
+
+```{r}
+ggplot(av.delays.dt, aes(origin, av_arr, fill=origin)) + geom_violin() + theme_bw()
+```
+
+# Two continuous variables
+
+## Scatterplots
+
+We can be interested in checking the relationship between arrival and departure delays for each hour segment, so every observation is a point in a scatterplot. We can also let ggplot draw a tendency line with `geom_smooth`:
+
+```{r}
+ggplot(av.delays.dt, aes(av_dep, av_arr)) + geom_point() + geom_smooth() + theme_bw()
+```
+
+And we can do the same for each origin, plotting it in a different color:
+
+```{r}
+ggplot(av.delays.dt, aes(av_dep, av_arr, color=origin)) + geom_point() + geom_smooth() + theme_bw()
+```
+
+## Two-density plots
+
+Similarly to one-density plots, we can draw density plots of bivariates:
+
+```{r}
+ggplot(av.delays.dt, aes(av_dep, av_arr)) + geom_density_2d() + theme_bw()
+```
+
+# Facet grids
+
+When we make plots with categories, we might want to get one plot for each category instead of a plot for each category. We can achieve this with `facet_grid`. We can make grids by rows, by columns, or both. Let's see it with several scatterplots:
+
+```{r}
+ggplot(av.delays.dt, aes(av_dep, av_arr)) + geom_point() + geom_smooth() + theme_bw() + facet_grid(origin ~ .)
+ggplot(av.delays.dt, aes(av_dep, av_arr)) + geom_point() + geom_smooth() + theme_bw() + facet_grid(. ~ origin)
+```
+
