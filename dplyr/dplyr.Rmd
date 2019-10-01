@@ -1,0 +1,164 @@
+---
+title: "Wrangling data with dplyr"
+author: "Jose M Sallan"
+date: "29/9/2019"
+output: html_document
+---
+
+#The mtcars data
+
+The **mtcars** data was extracted from the 1974 *Motor Trend US magazine*, and comprises fuel consumption and 10 aspects of automobile design and performance for 32 automobiles (1973–74 models). The meaning of each variable is:
+
+* **mpg**	Miles/(US) gallon
+* **cyl**	Number of cylinders
+* **disp**	Displacement (cu.in.)
+* **hp**	Gross horsepower
+* **drat**	Rear axle ratio
+* **wt**	Weight (1000 lbs)
+* **qsec**	1/4 mile time
+* **vs**	Engine (0 = V-shaped, 1 = straight)
+* **am**	Transmission (0 = automatic, 1 = manual)
+* **gear**	Number of forward gears
+* **carb**	Number of carburetors
+
+Usually we are interested in finding predictors of fuel consumptio, measured with the **mpg** variabnle.
+
+```{r}
+data("mtcars")
+head(mtcars)
+```
+
+```{r}
+str(mtcars)
+```
+
+In this document we will use the dplyr functions with the mtcars data frame.
+
+```{r, message=FALSE}
+library(dplyr)
+```
+
+#Select columns
+
+Let's how do we **select** columns with dplyr:
+
+```{r}
+head(select(mtcars, mpg, wt, am))
+```
+
+We can pick columns with names starting or ending like a specific string:
+
+```{r}
+head(select(mtcars, starts_with("c")))
+head(select(mtcars, ends_with("p")))
+```
+
+... and we can store the selected columns in another data frame:
+
+```{r}
+MilesHp <- select(mtcars, c(mpg, hp))
+head(MilesHp)
+```
+
+#Filter rows
+
+We can **filter** cases (rows) according to a logical expression. There we are selecting cases with mpg lower than 16:
+
+```{r}
+filter(mtcars, mpg < 16)
+```
+
+We can filter using more than one variable:
+
+```{r}
+filter(mtcars, mpg < 16 & am==1)
+```
+
+#Order (arrange) by variables
+
+We can arrange a data frame ordering it with the values of a column. By default, rows are order in increasing order (from smaller to bigger):
+
+```{r}
+head(arrange(mtcars, mpg), 3)
+tail(arrange(mtcars, mpg), 3)
+```
+
+We set the order using two or more variables, and use **desc** to order in decreasing order (from bigger to smaller):
+
+```{r}
+head(arrange(mtcars, am, desc(mpg)), 4)
+tail(arrange(mtcars, am, desc(mpg)), 4)
+```
+
+#Create (mutate) and rename variables
+
+We **mutate** a data frame by adding one or more new columns. To make the addition effective, we must save the results of the addition into an R variable, that can be the same data frame:
+
+```{r}
+mtcars2 <- mutate(mtcars, l100km = 235.215/mpg, model=rownames(mtcars))
+head(mtcars2)
+```
+
+We can also **rename** existing columns using the convention *new name = old name*:
+
+```{r}
+mtcars2 <- rename(mtcars2, manual=am)
+head(mtcars2)
+```
+
+#The piping operator
+
+It is frequent that we need to use several dplyr verbs to obtain some result. For instance, we may want to filter to some subset of elements, and select only some variables. This may require making several intermediate steps:
+
+```{r}
+aux1 <- filter(mtcars2, manual==1 & vs==1)
+result <- select(aux1, model, l100km, wt, disp)
+result
+```
+
+We can perform several operations with a single instruction using the **piping operator** `%>%`. When using the piping operator, we omit the first argument of the dplyr functions -the data frame-, that is replaced by the operations performed at the left of each operator:
+
+```{r}
+result2 <- mtcars2 %>% filter(manual==1 & vs==1) %>% select(model, l100km, wt, disp)
+result2
+```
+
+The result of both operations is identical:
+
+```{r}
+identical(result, result2)
+```
+
+
+#Summarizing and grouping
+
+We can summarise a data frame obtaining some statistic values for their columns. The result is a single row with the values for each column. In this case, we find the average of consumption and weight:
+
+```{r}
+mtcars2 %>% summarise(cons=mean(l100km), weight=mean(wt))
+```
+
+It is frequent to include categorical variables in the data, that allow grouping observations (e.g., automatic or manual, or by number of gears). Using the **group_by** function we can summarise values for each category. Here we are obtaining mean values of consumption and weight for automatic and manual cars:
+
+```{r}
+mtcars2 %>% group_by(manual) %>% summarise(cons=mean(l100km), weight=mean(wt))
+```
+
+We can group by more than one category. Then, we obtain the summarised values for all combinations of categories existing in the data set:
+
+```{r}
+mtcars2 %>% group_by(gear, manual) %>% summarise(cons=mean(l100km), weight=mean(wt))
+```
+
+In the above example, we see that there are no rows with `gear=5` and `manual=0`, and with `gear=3` and `manual=1.
+
+
+
+
+
+
+
+
+
+
+
