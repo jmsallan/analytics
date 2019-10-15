@@ -1,0 +1,175 @@
+---
+title: "Some insights into iris dataset"
+author: "Jose M Sallan"
+date: "15 de octubre de 2019"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#The iris dataset
+
+The Fisher's or Anderson's iris data set gives the measurements in centimeters of the variables sepal length and width and petal length and width, respectively, for 50 flowers from each of 3 species of iris. The species are Iris setosa, versicolor, and virginica.
+
+Here is the structure of the dataset:
+
+```{r}
+data(iris)
+str(iris)
+```
+
+# One variable
+
+We can use histograms to examine the distribution of a numeric variable (a vector of numbers, or a numeric column o a data frame):
+
+```{r}
+hist(iris$Sepal.Length, xlab = "Sepal length", main="Sepal lenght histogram", col="pink")
+```
+
+Notice how we have customized the graph with the `main`, `xlab` and `col` parameters.
+
+Instead of histograms, we can plot the density probability of the distribution. This is roughly equivalent to set width of histogram bins to zero:
+
+```{r}
+plot(density(iris$Sepal.Length), xlab = "Sepal length", main="Sepal lenght distribution")
+```
+
+We can present histogram and density in the same plot, but the histogram has to present relative frequencies:
+
+```{r}
+hist(iris$Sepal.Length, xlab = "Sepal length", main="Sepal lenght histogram", col="pink", probability = TRUE)
+lines(density(iris$Sepal.Length), col="blue")
+```
+
+We can also evaluate the distribution with a box plot, that can help us to detect outliers:
+
+```{r}
+boxplot(iris$Sepal.Length, main="Sepal Length")
+```
+
+The three plot show us that the distribution of `Sepal.Length` is slightly right skewed. We can confirm that comparing mean and median with the summary instruction:
+
+```{r}
+summary(iris$Sepal.Length)
+```
+
+# Categorical versus continuous variable
+
+We may be interested in comparing the values of a variable across the levels of a categorical variable. In this dataset, we have a categorical variable Species, coded as a factor in R. The levels of the factor are the categories:
+
+```{r}
+levels(iris$Species)
+```
+
+A useful plot to compare continuous variables across categories is to define a boxplot for each category. We can do that making:
+
+```{r}
+boxplot(iris$Sepal.Length ~ iris$Species, main="Sepal Length for each species", xlab="species", ylab="sepal length", col=c("red", "green", "blue"))
+```
+
+Note that we have defined a color for each species of iris.
+
+We can decide to plot three histograms, rather than three boxplots. Here we will need to separate into three data frames the observations of each species. We will use `dplyr` for that.
+
+```{r, message=FALSE}
+library(dplyr)
+iris.setosa <- iris %>% filter(Species=="setosa")
+iris.versicolor <- iris %>% filter(Species=="versicolor")
+iris.virginica <- iris %>% filter(Species=="virginica")
+```
+
+And now we can present a histogram for each species usign `par` with `mfrow` parameter:
+
+```{r, fig.width=10}
+par(mfrow=c(1,3))
+hist(iris.setosa$Sepal.Length, xlab = "Sepal length", main="Sepal lenght histogram", col="red")
+hist(iris.versicolor$Sepal.Length, xlab = "Sepal length", main="Sepal lenght histogram", col="green")
+hist(iris.virginica$Sepal.Length, xlab = "Sepal length", main="Sepal lenght histogram", col="blue")
+```
+
+Note that we have used the same colors as in the boxplots to link each species to a color.
+
+# Two continuous variables
+
+To examine the relationship between variables we use scatterplots. We obtain scatterplots in R base with the `plot` function, with two numeric vectors as input. Let's examine the relationship between sepal length and sepal width:
+
+```{r}
+plot(iris$Sepal.Length, iris$Sepal.Width)
+```
+
+We can improve the standard outcome of R for scatterplots changing ssome parameters:
+
+```{r}
+with(iris, plot(Sepal.Length, Sepal.Width, main="Sepal", xlab="sepal length", ylab="sepal width", pch=16))
+```
+
+We can be interested in assigning a color for each level of the `Species` variable. Let's look how does this variable looks like:
+
+```{r}
+iris$Species
+```
+
+We can define a character vector of color names assigning each color to each species:
+
+```{r}
+iris.colors <- c(rep("red", 50), rep("green", 50), rep("blue", 50))
+iris.colors
+```
+
+Let's use iris.color variable to assign a color to each observation:
+
+```{r}
+with(iris, plot(Sepal.Length, Sepal.Width, main="Sepal", xlab="sepal length", ylab="sepal width", pch=16, col=iris.colors))
+```
+
+We may be interested in adjusting a regression line to observations. We can do that with the `abline` function, using as input the outcome of a `lm` linear model function.
+
+```{r}
+with(iris, plot(Sepal.Length, Sepal.Width, main="Sepal", xlab="sepal length", ylab="sepal width", pch=16))
+abline(lm(Sepal.Width ~  Sepal.Length, iris))
+```
+
+This regression line is misleading, as we see that each species has a different behaviour. As we have have obtained data frames for each species, we can use that to evaluate different regression lines. We can add a legend to the plot for greater clarity:
+
+
+```{r, fig.height=7}
+with(iris, plot(Sepal.Length, Sepal.Width, main="Sepal", xlab="sepal length", ylab="sepal width", pch=16, col=iris.colors))
+abline(lm(Sepal.Width ~  Sepal.Length, iris.setosa), col="red")
+abline(lm(Sepal.Width ~  Sepal.Length, iris.versicolor), col="green")
+abline(lm(Sepal.Width ~  Sepal.Length, iris.virginica), col="blue")
+legend("topright", legend=c("setosa", "versicolor", "virginica"), lty=c(1,1,1), col=c("red", "green", "blue"), cex=0.9)
+```
+
+Alternatively, we can decide to make a plot for each species. Note that in this case we have to set the same limits for the variables in each plot, using `xlim` and `ylim`.
+
+```{r, fig.width=10, fig.height=4}
+par(mfrow=c(1,3))
+with(iris.setosa, plot(Sepal.Length, Sepal.Width, main="Sepal", xlab="sepal length", ylab="sepal width", pch=16, col="red", xlim=c(4,8), ylim=c(1.8, 4.5)))
+abline(lm(Sepal.Width ~  Sepal.Length, iris.setosa), col="red")
+
+with(iris.versicolor, plot(Sepal.Length, Sepal.Width, main="Sepal", xlab="sepal length", ylab="sepal width", pch=16, col="green", xlim=c(4,8), ylim=c(1.8, 4.5)))
+abline(lm(Sepal.Width ~  Sepal.Length, iris.versicolor), col="green")
+
+with(iris.virginica, plot(Sepal.Length, Sepal.Width, main="Sepal", xlab="sepal length", ylab="sepal width", pch=16, col="blue", xlim=c(4,8), ylim=c(1.8, 4.5)))
+abline(lm(Sepal.Width ~  Sepal.Length, iris.virginica), col="blue")
+```
+
+# More than two continuous variables
+
+If we have more than two variables, the best option is to plot them pairwise. If we use of input of `plot` a data frame of numeric vectors we obtain:
+
+```{r, fig.width=10, figh.height=15}
+plot(iris[, 1:4], pch=16, col=iris.colors)
+```
+
+From this scatterplot, we learn that the relationships between variables are heavily dependent on the species of iris.
+
+
+
+

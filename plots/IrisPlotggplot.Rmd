@@ -1,0 +1,128 @@
+---
+title: "Some insights into iris dataset"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#The iris dataset
+
+The Fisher's or Anderson's iris data set gives the measurements in centimeters of the variables sepal length and width and petal length and width, respectively, for 50 flowers from each of 3 species of iris. The species are Iris setosa, versicolor, and virginica.
+
+Here is the structure of the dataset:
+
+```{r}
+data(iris)
+str(iris)
+```
+
+We will use the tidyverse tools to obtain plots from this dataset, so we need to load two packages:
+
+* `dplr` for data wrangling
+* `ggplot2` for grammar of graphics (gg) plots
+
+```{r, message=FALSE}
+library(dplyr)
+library(ggplot2)
+```
+
+We can use histograms to examine the distribution of a numeric variable (a vector of numbers, or a numeric column o a data frame):
+
+```{r}
+ggplot(iris, aes(Sepal.Length)) + geom_histogram(bins=10)
+```
+
+We can adjust the aspect of the outcome with some parameters:
+
+```{r}
+ggplot(iris, aes(Sepal.Length)) + geom_histogram(bins=10, fill="grey", col="black") + labs(title="Histogram of sepal length") + xlab("sepal length") + ylab("frequency") + theme_bw()
+```
+
+Instead of histograms, we can plot the density probability of the distribution. This is roughly equivalent to set width of histogram bins to zero:
+
+```{r}
+ggplot(iris, aes(Sepal.Length)) + geom_density(fill="pink", col="black") + labs(title="Density function of sepal length") + xlab("sepal length") + ylab("frequency") + theme_bw()
+```
+
+And we can put histogram and density functions in the same plot:
+
+```{r}
+ggplot(iris, aes(Sepal.Length)) + geom_histogram(aes(y=..density..), bins=10, fill="pink", col="black") + geom_density(col="red") + labs(title="Histogram (probability) and density function of sepal length") + xlab("sepal length") + ylab("frequency") + theme_bw()
+```
+
+We can also evaluate the distribution with a box plot, that can help us to detect outliers:
+
+```{r}
+ggplot(iris, aes(factor(0), Sepal.Length)) + geom_boxplot(fill="pink")  + labs(title="Boxplot of sepal length") + xlab("all dataset") + ylab("length") + theme_bw()
+```
+
+Note that we had to introduce a fictitious x variable, as `geom_boxplot()` is defined for comparisons between subsets defined by categorical variables.
+
+The three plot show us that the distribution of `Sepal.Length` is slightly right skewed. We can confirm that comparing mean and median with the summary instruction:
+
+```{r}
+summary(iris$Sepal.Length)
+```
+
+# Categorical versus continuous variable
+
+We may be interested in comparing the values of a variable across the levels of a categorical variable. In this dataset, we have a categorical variable Species, coded as a factor in R. The levels of the factor are the categories:
+
+```{r}
+levels(iris$Species)
+```
+
+```{r}
+ggplot(iris, aes(Species, Sepal.Length)) + geom_boxplot(fill=c("red", "green", "blue")) + labs(title="Boxplots of sepal length for each species") + ylab("length") + theme_bw()
+```
+
+We can also define a grid of histograms for each species:
+
+```{r, fig.width=10}
+ggplot(iris, aes(Sepal.Length, fill=Species)) + geom_histogram(bins=10, col="black") + facet_grid(. ~ Species, scales = "free") + scale_fill_manual(values = c("red", "green", "blue")) + xlab("sepal length") + ylab("count") + labs(title="Histograms of sepal length for each species") + theme_bw()
+```
+
+# Two continuous variables
+
+We can make a scatterplot using `geom_point()`:
+
+```{r}
+ggplot(iris, aes(Sepal.Length, Sepal.Width)) + geom_point() + xlab("sepal length") + ylab("sepal width") + labs(title = "Sepal lenght vs sepal width") + theme_bw()
+```
+
+We can add to the scatterplot a regression line adding another layer:
+
+```{r}
+ggplot(iris, aes(Sepal.Length, Sepal.Width)) + geom_point() + xlab("sepal length") + ylab("sepal width") + labs(title = "Sepal lenght vs sepal width") + geom_smooth(method = "lm") + theme_bw()
+```
+
+The previous regression line might not be significant, as each species has a different behaviour. So, we can plot a different regression line for each species:
+
+```{r}
+ggplot(iris, aes(Sepal.Length, Sepal.Width, color=Species)) + geom_point() + xlab("sepal length") + ylab("sepal width") + labs(title = "Sepal lenght vs sepal width by species") + geom_smooth(method = "lm") + scale_fill_manual(values = c("red", "green", "blue")) + theme_bw()
+```
+
+If we want to, we can produce a scatterplot for each species usign `facet_grid()`:
+
+```{r, fig.width=10}
+ggplot(iris, aes(Sepal.Length, Sepal.Width, color=Species)) + geom_point() + xlab("sepal length") + ylab("sepal width") + labs(title = "Sepal lenght vs sepal width by species") + geom_smooth(method = "lm") + facet_grid(. ~ Species) + scale_fill_manual(values = c("red", "green", "blue")) + theme_bw()
+```
+
+# More than two continuous variables
+
+If we have more than two variables, the best option is to plot them pairwise. We can use for that the `ggpairs` function of the `GGally` package.
+
+```{r, message=FALSE, fig.width=10, fig.height=10}
+library(GGally)
+iris %>% ggpairs(mapping = ggplot2::aes(color=Species)) + theme_bw()
+```
+
+From this scatterplot, we learn that the relationships between variables are heavily dependent on the species of iris.
+
+
