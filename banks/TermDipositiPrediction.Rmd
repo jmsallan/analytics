@@ -1,0 +1,97 @@
+---
+title: "Term diposits campaign"
+author: "Jose M Sallan"
+date: "22 de octubre de 2019"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Objective of the analysis
+
+We want to answer the following question:
+
+Which kind of customers are most likely to subscribe (yes/no) a term deposit (variable y)?
+
+This means that we need to build a model to predict if a customer will suscribe a term deposit.
+
+# Methdology
+
+## The dataset
+
+The variables in our dataset are:
+
+1. age (numeric)
+2. job: type of job (categorical)
+3. marital: marital status (categorical)
+4. education: educational level (categorical)
+5. default: has credit in default? (binary)
+6. balance: average yearly balance, in euros (numeric) 
+7. housing: has housing loan? (binary)
+8. loan: has personal loan? (binary)
+From here, information related with the last contact of the current campaign:
+9. contact: contact communication type (categorical) 
+10. day: last contact day of the month (numeric)
+11. month: last contact month of year (categorical)
+12. duration: last contact duration, in seconds (numeric)
+Other attributes to consider:
+13. campaign: number of contacts performed during this campaign and for this client (numeric)
+14. pdays: number of days that passed by after the client was last contacted from a previous campaign (numeric, -1 means client was not previously contacted)
+15. previous: number of contacts performed before this campaign and for this client (numeric)
+16. poutcome: outcome of the previous marketing campaign (categorical)
+Output variable (desired target):
+17. y: has the client subscribed a term deposit? (binary)
+
+We can classify the variables as follows:
+
+* Demographics (variables 1 to 4)
+* Description of each individual as a customer (variables 5 to 8)
+* Impact of campaign on customer (variables 9 to 14)
+* Impact of previous campaigns on customer (variables 14 a 16)
+* Target variable (variable 17)
+
+# Results
+
+## Examining data
+
+We will start loading the data into R being categorical variables as factors, and summarise the resulting data frame:
+
+```{r, message=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+```
+
+
+```{r}
+banks01 <- read.csv2("bank.csv")
+summary(banks01)
+```
+
+The summary allows us to see that there are no missing data in any variable, and the categories available for each variable. As for the outcome variable we learn that `r sum(banks01$y=="yes")` have requested to open a term diposit, and `r sum(banks01$y=="yes")`, so that a `r sum(banks01$y=="yes")*100/nrow(banks01)`% of customer have suscribed a bank loan.
+
+```{r}
+banks01 %>% ggplot(aes(x=y, y=age, fill=y)) + geom_boxplot()
+```
+
+
+```{r}
+banks01 %>% group_by(job) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -job) %>% ggplot(aes(x=job, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```{r}
+banks01 %>% group_by(marital) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -marital) %>% ggplot(aes(x=marital, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw()
+```
+
+```{r}
+banks01 %>% group_by(education) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -education) %>% ggplot(aes(x=education, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw()
+```
+
+
+
