@@ -66,32 +66,88 @@ We will start loading the data into R being categorical variables as factors, an
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(gridExtra)
 ```
 
 
 ```{r}
-banks01 <- read.csv2("bank.csv")
-summary(banks01)
+banks <- read.csv2("bank.csv")
+summary(banks)
 ```
 
-The summary allows us to see that there are no missing data in any variable, and the categories available for each variable. As for the outcome variable we learn that `r sum(banks01$y=="yes")` have requested to open a term diposit, and `r sum(banks01$y=="yes")`, so that a `r sum(banks01$y=="yes")*100/nrow(banks01)`% of customer have suscribed a bank loan.
+The summary allows us to see that there are no missing data in any variable, and also the categories available for each variable. As for the outcome variable we learn that `r sum(banks$y=="yes")` have requested to open a term diposit, and `r sum(banks$y=="yes")`, so that a `r sum(banks$y=="yes")*100/nrow(banks)`% of customer have suscribed a bank loan.
+
+### Demographic variables
 
 ```{r}
-banks01 %>% ggplot(aes(x=y, y=age, fill=y)) + geom_boxplot()
+banks %>% ggplot(aes(x=y, y=age, fill=y)) + geom_boxplot()
 ```
 
 
 ```{r}
-banks01 %>% group_by(job) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -job) %>% ggplot(aes(x=job, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
-```
-
-```{r}
-banks01 %>% group_by(marital) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -marital) %>% ggplot(aes(x=marital, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw()
+banks %>% group_by(job) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -job) %>% ggplot(aes(x=job, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title="job")
 ```
 
 ```{r}
-banks01 %>% group_by(education) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -education) %>% ggplot(aes(x=education, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw()
+banks %>% group_by(marital) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -marital) %>% ggplot(aes(x=marital, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw() + labs(title="marital status")
+```
+
+```{r}
+banks %>% group_by(education) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -education) %>% ggplot(aes(x=education, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw() + labs("education")
+
 ```
 
 
+### Customer variables
+
+Let's examine the potential discriminant effect of customer variables:
+
+```{r}
+with(banks, table(default, y))
+with(banks, table(housing, y))
+with(banks, table(loan, y))
+```
+
+```{r}
+banks %>% group_by(default) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -default) %>% ggplot(aes(x=default, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw()
+```
+
+```{r}
+banks %>% group_by(housing) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -housing) %>% ggplot(aes(x=housing, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw()
+```
+
+```{r}
+banks %>% group_by(loan) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -loan) %>% ggplot(aes(x=loan, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw()
+```
+
+
+```{r}
+banks %>% ggplot(aes(x=y, y=balance, fill=y)) + geom_boxplot()
+```
+
+```{r}
+banks %>% filter(balance<=10000) %>% ggplot(aes(x=y, y=balance, fill=y)) + geom_boxplot()
+```
+
+### Campaign
+
+```{r}
+banks %>% group_by(contact) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -contact) %>% ggplot(aes(x=contact, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw()
+```
+
+```{r}
+banks %>% ggplot(aes(x=y, y=duration, fill=y)) + geom_boxplot()
+```
+
+```{r}
+banks %>% group_by(poutcome) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -poutcome) %>% ggplot(aes(x=poutcome, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw()
+```
+
+There are two groups in the sample:
+
+* People not contacted in previous campaigns: they have `pdays=-1`, `previous=0` and `poutcome=unkown`. There are `r banks %>% filter(pdays==-1) %>% summarise(n())` not contacted previously individuals.
+* People contacted in previous campaigns. There are `r banks %>% filter(pdays!=-1) %>% summarise(n())` previously contacted individuals.
+
+```{r}
+```
 
