@@ -1,7 +1,7 @@
 ---
 title: "Term diposits campaign"
 author: "Jose M Sallan"
-date: "22 de octubre de 2019"
+date: "22 October 2019"
 output: 
   html_document:
     toc: true
@@ -21,7 +21,7 @@ Which kind of customers are most likely to subscribe (yes/no) a term deposit (va
 
 This means that we need to build a model to predict if a customer will suscribe a term deposit.
 
-# Methdology
+# Methodology
 
 ## The dataset
 
@@ -79,34 +79,38 @@ The summary allows us to see that there are no missing data in any variable, and
 
 ### Demographic variables
 
+Let's look for differences between the two groups defined by the outcome variables that can be explained with demographic variables:
+
 ```{r}
 banks %>% ggplot(aes(x=y, y=age, fill=y)) + geom_boxplot()
 ```
 
+There does not seem to be differences of the range of ages of the two groups.
 
 ```{r}
 banks %>% group_by(job) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -job) %>% ggplot(aes(x=job, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title="job")
 ```
 
+When we look for between jobs differences, we can see that students and retired customers tend to suscribe more deposits.
+
 ```{r}
 banks %>% group_by(marital) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -marital) %>% ggplot(aes(x=marital, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw() + labs(title="marital status")
 ```
+
+Divorced and single people tend to suscribe more deposits than married customers.
 
 ```{r}
 banks %>% group_by(education) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -education) %>% ggplot(aes(x=education, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw() + labs("education")
 
 ```
 
+We can observe a slight tendency of acquiring more deposits as education grows.
+
+In all cases the differences observed are relatively small.
 
 ### Customer variables
 
-Let's examine the potential discriminant effect of customer variables:
-
-```{r}
-with(banks, table(default, y))
-with(banks, table(housing, y))
-with(banks, table(loan, y))
-```
+Let's examine the potential discriminant effect of customer variables
 
 ```{r}
 banks %>% group_by(default) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -default) %>% ggplot(aes(x=default, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw()
@@ -120,6 +124,8 @@ banks %>% group_by(housing) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")
 banks %>% group_by(loan) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -loan) %>% ggplot(aes(x=loan, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw()
 ```
 
+The behoviour of defaulted customers does not seem to be different from not defaulted. Customers with housing and personal loans tend to suscribe term diposits less frequently than customers that have not suscribed loans.
+
 
 ```{r}
 banks %>% ggplot(aes(x=y, y=balance, fill=y)) + geom_boxplot()
@@ -129,25 +135,83 @@ banks %>% ggplot(aes(x=y, y=balance, fill=y)) + geom_boxplot()
 banks %>% filter(balance<=10000) %>% ggplot(aes(x=y, y=balance, fill=y)) + geom_boxplot()
 ```
 
+The plots above look for differences between the value of balance of both groups. We can see large differences in balance (there are many outliers with high value of balance), so we have examined differences between groups examining values of balance equal or smaller than 10,000 in the second plot. We observe that loans tend to be suscribed with people with higher values of balance, although the differences in balance are not significant:
+
+```{r}
+t.test(balance ~ y, data=banks)
+```
+
+Again, there does not seem to be significant differences between outcome-based groups in customer-related variables.
+
 ### Campaign
+
+Let's look at variables describing the marketing campaign.
 
 ```{r}
 banks %>% group_by(contact) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -contact) %>% ggplot(aes(x=contact, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw()
 ```
 
+The type of contact does not influence the outcome, as proportions between groups are similar. As for number of contacts, the mean number of contacts between groups is similar:
+
+```{r}
+banks %>% group_by(y) %>% summarise(mean(campaign))
+```
+
+
 ```{r}
 banks %>% ggplot(aes(x=y, y=duration, fill=y)) + geom_boxplot()
 ```
 
+Examining the duration of the call, here we see significant differences:
+
 ```{r}
-banks %>% group_by(poutcome) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -poutcome) %>% ggplot(aes(x=poutcome, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw()
+t.test(duration ~ y, data=banks)
 ```
 
-There are two groups in the sample:
+Customers that later suscribed the deposited tend to maintain longer calls when contacted. So call duration, rather than number of calls, seems to predict a positive outcome of the campaign.
+
+```{r}
+t.test(duration ~ y, data=banks)
+```
+
+```{r}
+banks$month <- factor(banks$month, levels=c("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))
+banks %>% group_by(month) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -month) %>% ggplot(aes(x=month, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw()
+```
+
+When we examine differences of success rate across months, we find relevant differences between months. Seems like march, september, october and december are the most effective months to get new deposit loans.
+
+```{r}
+banks %>% group_by(month, y) %>% summarise(counts=n()) %>% ggplot(aes(x=month, y=counts, fill=y)) + geom_bar(stat = "identity", position = "dodge") + theme_bw()
+```
+
+We observe, though, that this high rate of success is obtained in months when the number of calls has been small. 
+
+As for previous contacts,There are two groups in the sample:
 
 * People not contacted in previous campaigns: they have `pdays=-1`, `previous=0` and `poutcome=unkown`. There are `r banks %>% filter(pdays==-1) %>% summarise(n())` not contacted previously individuals.
 * People contacted in previous campaigns. There are `r banks %>% filter(pdays!=-1) %>% summarise(n())` previously contacted individuals.
 
+We define a new variable to label previously contacted individuals. Note that we are modifying `banks`, so we need to overwrite the data frame:
+
 ```{r}
+banks <- banks %>% mutate(contacted = ifelse(pdays!=-1, "yes", "no"))
 ```
 
+```{r}
+banks %>% filter(contacted=="yes") %>% group_by(poutcome) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -poutcome) %>% ggplot(aes(x=poutcome, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw()
+```
+
+If we restrict the analysis of previously contacted individuals, we can see that the strongest predictor of success in the present campaign is that the customers belong to the successful group in previous campaigns.
+
+```{r}
+banks %>% group_by(month, contacted) %>% summarise(count=n()) %>% ggplot(aes(x=month, y = count, fill=contacted)) + geom_bar(stat = "identity", position = "dodge") + theme_bw()
+```
+
+The above graph shows that the months were campaigns were most sucessful were months with a high proportion of individuals coming from previous campaigns.
+
+# Conclusion
+
+The strongest predictor of success in the campaign of suscription of new term deposits is that the customer has been sucessfully contacted in previous campaigns. To a lesser extent, the variables job, marital status and educational level present differences between sucessful and unsucessful contacts. People with no personal or housing loans tend to suscribe term deposits. As for the marketing campaign, duration of call is a predictor of interest in suscribing a term deposit.
+
+As a conclusion, we can recommend that the banks builds a dataset of people sucessfully contacted in marketing campaigns, as a potential target for new campaigns. We also recommend re-contacting customers that have made a long contact in the present campaign.
