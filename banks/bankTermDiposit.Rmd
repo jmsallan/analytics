@@ -17,7 +17,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 We want to answer the following question:
 
-Which kind of customers are most likely to subscribe (yes/no) a term deposit (variable y)?
+* Which kind of customers are most likely to subscribe (yes/no) a term deposit (variable y)?
 
 This means that we need to build a model to predict if a customer will suscribe a term deposit.
 
@@ -48,13 +48,19 @@ Other attributes to consider:
 Output variable (desired target):
 17. y: has the client subscribed a term deposit? (binary)
 
+The individuals in this dataset are people contacted in a campaign to sell term diposits. Some individuals have been contacted in previous campaigns.
+
+## Data analysis
+
 We can classify the variables as follows:
 
 * Demographics (variables 1 to 4)
 * Description of each individual as a customer (variables 5 to 8)
-* Impact of campaign on customer (variables 9 to 14)
+* Impact of campaign on customer (variables 9 to 13)
 * Impact of previous campaigns on customer (variables 14 a 16)
 * Target variable (variable 17)
+
+Then, we will look for signfiicant differences of the proportion of people suscribing term diposits (value of "yes" in the y variable). In some cases, we can be interested in examining how many people there is in each group.
 
 # Results
 
@@ -66,7 +72,6 @@ We will start loading the data into R being categorical variables as factors, an
 library(dplyr)
 library(tidyr)
 library(ggplot2)
-library(gridExtra)
 ```
 
 
@@ -75,7 +80,7 @@ banks <- read.csv2("bank.csv")
 summary(banks)
 ```
 
-The summary allows us to see that there are no missing data in any variable, and also the categories available for each variable. As for the outcome variable we learn that `r sum(banks$y=="yes")` have requested to open a term diposit, and `r sum(banks$y=="yes")`, so that a `r sum(banks$y=="yes")*100/nrow(banks)`% of customer have suscribed a bank loan.
+The summary allows us to see that there are no missing data in any variable, and also the categories available for each variable. As for the outcome variable we learn that `r sum(banks$y=="yes")` have requested to open a term diposit, and `r sum(banks$y=="yes")`, so that a `r sum(banks$y=="yes")*100/nrow(banks)`% of contacted customers have suscribed a bank loan.
 
 ### Demographic variables
 
@@ -85,19 +90,19 @@ Let's look for differences between the two groups defined by the outcome variabl
 banks %>% ggplot(aes(x=y, y=age, fill=y)) + geom_boxplot()
 ```
 
-There does not seem to be differences of the range of ages of the two groups.
+There does not seem to be differences across the range of ages of the two groups.
 
 ```{r}
 banks %>% group_by(job) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -job) %>% ggplot(aes(x=job, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title="job")
 ```
 
-When we look for between jobs differences, we can see that students and retired customers tend to suscribe more deposits.
+When we look for differences across jobs, we can see that students and retired customers tend to suscribe more deposits.
 
 ```{r}
 banks %>% group_by(marital) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -marital) %>% ggplot(aes(x=marital, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw() + labs(title="marital status")
 ```
 
-Divorced and single people tend to suscribe more deposits than married customers.
+Divorced and single individuals tend to suscribe more deposits than married customers.
 
 ```{r}
 banks %>% group_by(education) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -education) %>% ggplot(aes(x=education, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw() + labs("education")
@@ -110,7 +115,7 @@ In all cases the differences observed are relatively small.
 
 ### Customer variables
 
-Let's examine the potential discriminant effect of customer variables
+Let's examine the potential discriminant effect of customer variables.
 
 ```{r}
 banks %>% group_by(default) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -default) %>% ggplot(aes(x=default, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw()
@@ -126,6 +131,17 @@ banks %>% group_by(loan) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n(
 
 The behoviour of defaulted customers does not seem to be different from not defaulted. Customers with housing and personal loans tend to suscribe term diposits less frequently than customers that have not suscribed loans.
 
+The effect of loans can be related with marital status. We will check if there are differences of people getting a housing and personal loan across marital status:
+
+```{r}
+banks %>% group_by(loan, marital) %>% summarise(count=n()) %>% ggplot(aes(x=loan, y=count, fill=marital)) + geom_bar(stat = "identity", position="dodge")
+```
+
+```{r}
+banks %>% group_by(housing, marital) %>% summarise(count=n()) %>% ggplot(aes(x=housing, y=count, fill=marital)) + geom_bar(stat = "identity", position="dodge")
+```
+
+We can see that married customers tend to have more personal loans that divorced and single, so they tend to suscribe less term diposits.
 
 ```{r}
 banks %>% ggplot(aes(x=y, y=balance, fill=y)) + geom_boxplot()
@@ -141,8 +157,6 @@ The plots above look for differences between the value of balance of both groups
 t.test(balance ~ y, data=banks)
 ```
 
-Again, there does not seem to be significant differences between outcome-based groups in customer-related variables.
-
 ### Campaign
 
 Let's look at variables describing the marketing campaign.
@@ -151,28 +165,23 @@ Let's look at variables describing the marketing campaign.
 banks %>% group_by(contact) %>% summarise(yes=sum(y=="yes")/n(), no=sum(y=="no")/n()) %>% gather(value, proportion, -contact) %>% ggplot(aes(x=contact, y=proportion, fill=value)) + geom_bar(stat = "identity") + theme_bw()
 ```
 
-The type of contact does not influence the outcome, as proportions between groups are similar. As for number of contacts, the mean number of contacts between groups is similar:
+The type of contact does not influence outcome, as proportions between groups defined by type of contact are similar. As for number of contacts, the mean number of contacts between groups is similar:
 
 ```{r}
 banks %>% group_by(y) %>% summarise(mean(campaign))
 ```
 
+Examining the duration of the call, here we see significant differences:
 
 ```{r}
 banks %>% ggplot(aes(x=y, y=duration, fill=y)) + geom_boxplot()
 ```
-
-Examining the duration of the call, here we see significant differences:
 
 ```{r}
 t.test(duration ~ y, data=banks)
 ```
 
 Customers that later suscribed the deposited tend to maintain longer calls when contacted. So call duration, rather than number of calls, seems to predict a positive outcome of the campaign.
-
-```{r}
-t.test(duration ~ y, data=banks)
-```
 
 ```{r}
 banks$month <- factor(banks$month, levels=c("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))
@@ -187,12 +196,12 @@ banks %>% group_by(month, y) %>% summarise(counts=n()) %>% ggplot(aes(x=month, y
 
 We observe, though, that this high rate of success is obtained in months when the number of calls has been small. 
 
-As for previous contacts,There are two groups in the sample:
+We will now examine the effect of the results of previous campaigns in the present campaign. We can distinguish two groups in the sample:
 
-* People not contacted in previous campaigns: they have `pdays=-1`, `previous=0` and `poutcome=unkown`. There are `r banks %>% filter(pdays==-1) %>% summarise(n())` not contacted previously individuals.
+* People not contacted in previous campaigns: they have `pdays=-1`, `previous=0` and `poutcome="unkown"`. There are `r banks %>% filter(pdays==-1) %>% summarise(n())` not contacted previously individuals.
 * People contacted in previous campaigns. There are `r banks %>% filter(pdays!=-1) %>% summarise(n())` previously contacted individuals.
 
-We define a new variable to label previously contacted individuals. Note that we are modifying `banks`, so we need to overwrite the data frame:
+We define a new variable to label individuals contacted in previous campaigns. Note that we are modifying `banks`, so we need to overwrite the data frame:
 
 ```{r}
 banks <- banks %>% mutate(contacted = ifelse(pdays!=-1, "yes", "no"))
@@ -212,6 +221,6 @@ The above graph shows that the months were campaigns were most sucessful were mo
 
 # Conclusion
 
-The strongest predictor of success in the campaign of suscription of new term deposits is that the customer has been sucessfully contacted in previous campaigns. To a lesser extent, the variables job, marital status and educational level present differences between sucessful and unsucessful contacts. People with no personal or housing loans tend to suscribe term deposits. As for the marketing campaign, duration of call is a predictor of interest in suscribing a term deposit.
+The strongest predictor of success in the suscription of new term deposits campaign is that the customer has been sucessfully contacted in previous campaigns. To a lesser extent, the variables job, marital status and educational level present differences between sucessful and unsucessful contacts. People with no personal or housing loans tend to suscribe term deposits. As for the marketing campaign, duration of call is a predictor of interest in suscribing a term deposit.
 
-As a conclusion, we can recommend that the banks builds a dataset of people sucessfully contacted in marketing campaigns, as a potential target for new campaigns. We also recommend re-contacting customers that have made a long contact in the present campaign.
+As a conclusion, we can recommend the bank to build a dataset of people sucessfully contacted in marketing campaigns, as a potential target for new campaigns. We also recommend re-contacting customers that have made a long contact in the present campaign.
