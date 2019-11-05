@@ -1,0 +1,155 @@
+---
+title: "Clustering algorithms"
+author: "Jose M Sallan"
+date: "5 November 2019"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In this vignette we will illustrate how to use clustering algorithms to classify elements of a dataset in a exploratory data analysis. The examined clustering algorithms are **k-means clustering** and **hierarchical clustering**. We will use synthetic data to show how good are algorithms are clustering, but we must remember than in real clustering analysis we do not know in advance the category to which each element belongs, and even we do not know the number of categories to extract. 
+
+# Synthetic data
+
+Let's create a dataset consisting of four clusters of 100 elements each:
+
+```{r}
+set.seed(1111)
+x <- rnorm(400, rep(c(1,3,6,8), each=100), sd=0.8)
+y <- rnorm(400, rep(c(3,6,4,5), each=100), sd=0.8)
+c <- rep(c("red", "springgreen4", "blue", "gray"), each=100)
+m <- rep(c("G1", "G2", "G3", "G4"), each=100)
+
+df <- data.frame(x,y,c,m)
+```
+
+Let's plot all elements of each cluster with a different color, together with the centers:
+
+```{r, fig.height=7, fig.width=7}
+plot(x, y, col=c, pch=16, cex=0.6, xlim = c(-2,10), ylim=c(1,8))
+points(c(1,3,6,8), c(3,6,4,5), col=c("red", "springgreen4", "blue", "gray"), pch=3, cex=2, lwd=3)
+```
+
+We can see that it may difficult to separate elements of blue and gray clusters.
+
+# k-means clustering
+
+Let's start with a k-means clustering algorithm. In the context of a clustering analysis, we do not know how manu clusters *k* can be adequate. So we will identify them using the elbow method. First we pick a measure of clustering effectiveness for several values of *k*. We can use the quotient between the sum of squared distances within elements of the same cluster `tot.withinss` divided by total sum of squares `totss`:
+
+```{r}
+testk <- 2:10
+
+elbow.meas <- sapply(testk, function(x){
+  km <- kmeans(df[, 1:2], x)
+  return(km$tot.withinss/km$totss)
+} )
+```
+
+Let's plot the value of the performance measure against *k*:
+
+```{r, fig.height=5, fig.width=5}
+plot(testk, elbow.meas, type="l", xlab="k", ylab="within.ss/totss", xaxt="n", yaxt="n", cex.labels=0.8)
+axis(1, at=testk, cex.axis=0.6)
+axis(2, las=2, cex.axis=0.6)
+text(4.5, 0.15, "elbow")
+```
+
+The elbow (abrupt change in performance) is obtained for $k=4$. Let's retain the k-means analysis with four centroids:
+
+```{r}
+ck <- kmeans(df[, 1:2], 4)
+```
+
+Let's look at the obtained centers:
+
+```{r}
+ck$centers
+```
+
+The centers used to obtain the data were `(1,3)`, `(3,6)`, `(6,4)` and `(8,5)`. So groups 1, 2, 3 and 4 correspond with the groups `G1`, `G3`, `G2` and `G4` of data generation. The assigment of each element to clusters is (we only present the first 50 elements):
+
+```{r}
+ck$cluster[1:50]
+```
+
+Let's examine the effectiveness of clustering graphically. In this plot, each observation is labelled with the  group obtained in clustering, and colored according to data generation. We plot also the original centers and the centers obtained in the clustering:
+
+```{r, fig.height=7, fig.width=7}
+plot(x, y, type="n", cex.axis=0.6, xlim = c(-2,10), ylim=c(1,8))
+text(x, y, ck$cluster, col=as.character(df$c), cex=0.7)
+points(c(1,3,6,8), c(3,6,4,5), col=c("red", "springgreen4", "blue", "gray"), pch=3, cex=2, lwd=3)
+points(ck$centers[ ,1][c(1,3,2,4)], ck$centers[ ,2][c(1,3,2,4)], col=c("red", "springgreen4", "blue", "gray"), pch=4, cex=2, lwd=3)
+legend("topright", pch=c(3,4), legend=c("real", "k-means"))
+```
+
+In this plot, `1` points should be in red, `2` points in blue, `3` points in green and `4` points in gray.
+
+```{r, fig.height=7, fig.width=7}
+clust <- ck$cluster
+goodclass <- (m=="G1" & clust==1) | (m=="G2" & clust==3) | (m=="G3" & clust==2) | (m=="G4" & clust==4)
+dfbad <- df[!goodclass, ]
+ckbad <- ck$cluster[!goodclass]
+plot(x, y, type="n", cex.axis=0.6, xlim = c(-2,10), ylim=c(1,8))
+text(dfbad$x, dfbad$y, ckbad, col=as.character(dfbad$c), cex=0.7)
+points(c(1,3,6,8), c(3,6,4,5), col=c("red", "springgreen4", "blue", "gray"), pch=3, cex=2, lwd=3)
+points(ck$centers[ ,1][c(1,3,2,4)], ck$centers[ ,2][c(1,3,2,4)], col=c("red", "springgreen4", "blue", "gray"), pch=4, cex=2, lwd=3)
+legend("topright", pch=c(3,4), legend=c("real", "k-means"))
+```
+
+In the plot above are presented the elements classified incorrectly with k-means clustering. We have `r sum(!goodclass)` elements not classified correctly.
+
+# Hierarchical clustering
+
+Let's perform a hierarchical clustering of the data, using Euclidean distances and the default settings of `hclust`:
+
+```{r}
+hc <- hclust(dist(df[, 1:2]))
+```
+
+Let's load the `dendextend` package for better dendogram plotting:
+
+```{r, message=FALSE}
+library(dendextend)
+```
+
+We start preparing the dendogram, coloring the clustering into four elements:
+
+```{r}
+dend <- as.dendrogram(hc)
+dend <- color_branches(dend, k=4)
+labels(dend) <- m
+labels_colors(dend) <- c
+```
+
+And now we can proceed to plot it:
+
+```{r, fig.height=10}
+plot(dend, main="Clustering analysis", horiz = TRUE, nodePar = list(cex=0.001))
+```
+
+If we want to, we can cut the dendogram around `h=5.8`, and then plot each of the lower dendograms:
+
+```{r, }
+dend4 <- cut(dend, h=5.8)
+a <- lapply(dend4$lower, function(x) plot(x, horiz=TRUE, nodePar = list(cex=0.001)))
+```
+
+We are seeing that it is making a worse classification than the k-means. Let's obtain the assigment to clusters obtained cutting at `h=5.8`:
+
+```{r, fig.height=7, fig.width=7}
+clusthc <- cutree(hc, h=5.8)
+goodclasshc <- (m=="G1" & clusthc==1) | (m=="G2" & clust==3) | (m=="G3" & clust==2) | (m=="G4" & clust==4)
+dfbadhc <- df[!goodclasshc, ]
+hcbad <- clusthc[!goodclass]
+plot(x, y, type="n", cex.axis=0.6, xlim = c(-2,10), ylim=c(1,8))
+text(dfbadhc$x, dfbadhc$y, hcbad, col=as.character(dfbadhc$c), cex=0.7)
+points(c(1,3,6,8), c(3,6,4,5), col=c("red", "springgreen4", "blue", "gray"), pch=3, cex=2, lwd=3)
+```
+
+This classification with hierarchical clustering leads to `r sum(!goodclasshc)` elements classified incorrectly.
