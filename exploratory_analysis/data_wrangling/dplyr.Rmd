@@ -2,12 +2,16 @@
 title: "Wrangling data with dplyr"
 author: "Jose M Sallan"
 date: "29/9/2019"
-output: html_document
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
 ---
 
-#The mtcars data
+# The mtcars data
 
-The **mtcars** data was extracted from the 1974 *Motor Trend US magazine*, and comprises fuel consumption and 10 aspects of automobile design and performance for 32 automobiles (1973–74 models). The meaning of each variable is:
+The `mtcars` data was extracted from the 1974 *Motor Trend US magazine*, and comprises fuel consumption and 10 aspects of automobile design and performance for 32 automobiles (1973–74 models). The meaning of each variable is:
 
 * **mpg**	Miles/(US) gallon
 * **cyl**	Number of cylinders
@@ -21,7 +25,7 @@ The **mtcars** data was extracted from the 1974 *Motor Trend US magazine*, and c
 * **gear**	Number of forward gears
 * **carb**	Number of carburetors
 
-Usually we are interested in finding predictors of fuel consumptio, measured with the **mpg** variabnle.
+Usually we are interested in finding predictors of fuel consumptio, measured with the `mpg` variabnle.
 
 ```{r}
 data("mtcars")
@@ -32,15 +36,17 @@ head(mtcars)
 str(mtcars)
 ```
 
-In this document we will use the dplyr functions with the mtcars data frame.
+# Data wrangling
+
+In this document we will use the `dplyr` functions with the `mtcars` data frame.
 
 ```{r, message=FALSE}
 library(dplyr)
 ```
 
-#Select columns
+## `select` columns
 
-Let's how do we **select** columns with dplyr:
+Let's how do we `select` columns with dplyr:
 
 ```{r}
 head(select(mtcars, mpg, wt, am))
@@ -60,53 +66,61 @@ MilesHp <- select(mtcars, c(mpg, hp))
 head(MilesHp)
 ```
 
-#Filter rows
+## `filter` rows
 
-We can **filter** cases (rows) according to a logical expression. There we are selecting cases with mpg lower than 16:
+We can `filter` cases (rows) according to a logical expression. There we are selecting cases with `mpg` lower than 16:
 
 ```{r}
 filter(mtcars, mpg < 16)
 ```
 
-We can filter using more than one variable:
+We can `filter` using more than one variable:
 
 ```{r}
 filter(mtcars, mpg < 16 & am==1)
 ```
 
-#Order (arrange) by variables
+## `arrange` (order) by variables
 
-We can arrange a data frame ordering it with the values of a column. By default, rows are order in increasing order (from smaller to bigger):
+We can `arrange` a data frame ordering it with the values of a column. By default, rows are order in increasing order (from smaller to bigger):
 
 ```{r}
 head(arrange(mtcars, mpg), 3)
 tail(arrange(mtcars, mpg), 3)
 ```
 
-We set the order using two or more variables, and use **desc** to order in decreasing order (from bigger to smaller):
+We set the order using two or more variables, and use `desc` to order in decreasing order (from bigger to smaller):
 
 ```{r}
 head(arrange(mtcars, am, desc(mpg)), 4)
 tail(arrange(mtcars, am, desc(mpg)), 4)
 ```
 
-#Create (mutate) and rename variables
+Applying a minus sing to de variable makes the same effect as `desc`:
 
-We **mutate** a data frame by adding one or more new columns. To make the addition effective, we must save the results of the addition into an R variable, that can be the same data frame:
+```{r}
+head(arrange(mtcars, am, -mpg), 4)
+tail(arrange(mtcars, am, -mpg), 4)
+```
+
+
+## `mutate` (create) and `rename` variables
+
+We `mutate` a data frame by adding one or more new columns. To make the addition effective, we must save the results of the addition into a variable, that can be the same data frame:
 
 ```{r}
 mtcars2 <- mutate(mtcars, l100km = 235.215/mpg, model=rownames(mtcars))
 head(mtcars2)
 ```
 
-We can also **rename** existing columns using the convention *new name = old name*:
+We can also `rename` existing columns using the convention *new name = old name*:
 
 ```{r}
-mtcars2 <- rename(mtcars2, manual=am)
+mtcars2 <- rename(mtcars2, manual = am)
 head(mtcars2)
 ```
 
-#The piping operator
+## The piping operator
 
 It is frequent that we need to use several dplyr verbs to obtain some result. For instance, we may want to filter to some subset of elements, and select only some variables. This may require making several intermediate steps:
 
@@ -130,21 +144,41 @@ identical(result, result2)
 ```
 
 
-#Summarizing and grouping
+# Grouping
 
-We can summarise a data frame obtaining some statistic values for their columns. The result is a single row with the values for each column. In this case, we find the average of consumption and weight:
+## Defining groups
+
+When whe make an operation in a data frame, it is applied to the whole data frame by default. It is frequent to include categorical variables in the data, that allow grouping observations (e.g., automatic or manual, or by number of gears) using the `group_by` function. When we apply `group_by` to a data frame, nothing happens apparently, but the data frame has been sliced into as many groups as levels of the categorical variable.
+
+Let's apply that grouping functionality to define an `id` number for cars with automatic and manual transmission combining `group_by` and `mutate`:
+
+```{r}
+mtcars2 <- mtcars2 %>% group_by(manual) %>% mutate(id=1:n())
+```
+
+Let's see how `id` has been defined for each group:
+
+```{r}
+mtcars2 %>% filter(manual == 0) %>% select(manual, model, id) %>% print(n=5)
+mtcars2 %>% filter(manual == 1) %>% select(manual, model, id) %>% print(n=5)
+```
+
+
+## Summarising and grouping
+
+We can `summarise` a data frame obtaining some statistic values for their columns. The result is a single row with the values for each column. In this case, we find the average of consumption and weight:
 
 ```{r}
 mtcars2 %>% summarise(cons=mean(l100km), weight=mean(wt))
 ```
 
-It is frequent to include categorical variables in the data, that allow grouping observations (e.g., automatic or manual, or by number of gears). Using the **group_by** function we can summarise values for each category. Here we are obtaining mean values of consumption and weight for automatic and manual cars:
+Using `group_by` together with `summarise` we can summarise values for each category. Here we are obtaining mean values of consumption and weight for automatic and manual cars:
 
 ```{r}
 mtcars2 %>% group_by(manual) %>% summarise(cons=mean(l100km), weight=mean(wt))
 ```
 
-We can group by more than one category. Then, we obtain the summarised values for all combinations of categories existing in the data set:
+We can `group_by` more than one category. Then, we obtain the summarised values for all combinations of categories existing in the data set:
 
 ```{r}
 mtcars2 %>% group_by(gear, manual) %>% summarise(cons=mean(l100km), weight=mean(wt))
@@ -152,6 +186,75 @@ mtcars2 %>% group_by(gear, manual) %>% summarise(cons=mean(l100km), weight=mean(
 
 In the above example, we see that there are no rows with `gear=5` and `manual=0`, and with `gear=3` and `manual=1.
 
+
+
+# Joining dataframes
+
+dplyr includes a set of functions for joining dataframes with a relational structure. This means that we have columns in each table (not necessarily with the same name), that can relate the contents of the two tables.
+
+```{r, message=FALSE}
+library(dplyr)
+```
+
+## Mutating joins
+
+**Mutating joins** return a data frame with the columns of two data frames *x* and *y*:
+
+```{r, echo=FALSE}
+url <- "http://www1.udel.edu/evelyn/SQL-Class2/joins.jpg"
+```
+
+![](`r url`)
+
+* **inner join**: returns all rows from *x* where there are matching values in *y*. If there are multiple matches between *x* and *y*, all combination of the matches are returned.
+
+* **full (outer) join**: returns all rows from both *x* and *y*.  Where there are not matching values, returns NA for the ones missing.
+
+* **left join**: returns all rows from **x**. Rows of *x* with no match in *y* will have NA values in the *y* columns. If there are multiple matches between *x* and *y*, all combination of the matches are returned.
+
+* **right join**: returns all rows from **y**. Rows of *y* with no match in *x* will have NA values in the *x* columns. If there are multiple matches, all combinations are returned.
+
+These four mutating joins are implemented in dplyr with the **inner_join**, **full_join**, **left_join** and **right_join** functions.
+
+To illustrate the result of the four mutating joins, we use a minimal example from the `dplyr`package:
+
+```{r}
+band_members
+band_instruments
+```
+
+The columns used to build the join are, by default, the ones with the same column name, in this case the `name` columns. Let's do a inner and and outer join:
+
+```{r}
+inner_join(band_members, band_instruments)
+full_join(band_members, band_instruments)
+```
+
+And now let's perform a left and right join:
+
+```{r}
+right_join(band_members, band_instruments)
+left_join(band_members, band_instruments)
+```
+
+## Filtering joins
+
+Filtering joins are used to retain (filter) rows of *x* with matching values in *y*, or without matching values in *y*. In dplyr, we use the `semi_join` and `anti_join` functions to do the first and second filtering, respectively:
+
+```{r}
+semi_join(band_members, band_instruments)
+anti_join(band_members, band_instruments)
+```
+
+## Specifying joining columns with by
+
+If the names of joining columns are different in each data frame, we use the parameter `by`:
+
+```{r}
+inner_join(band_members, band_instruments2, by=c("name" = "artist"))
+```
+
+Note that in the result, the name of the joining column of the left-hand side data frame is retained.
 
 
 

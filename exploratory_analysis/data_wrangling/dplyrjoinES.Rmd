@@ -1,0 +1,59 @@
+---
+title: "Uniendo tablas en tidyverse"
+author: "Jose M Sallan"
+date: "17/03/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+`dplyr` incluye un conjunto de funciones para unir data frames con  estructura relacional. Esto significa que tenemos columnas en cada tabla (no necesariamente con el mismo nombre), que pueden relacionar el contenido de las dos tablas.
+
+```{r, message=FALSE}
+library(tidyverse)
+```
+
+# Tipos de join
+
+En esta imagen se muestran los diversos tipos de `join` o uniones de dos data frames:
+
+```{r, echo=FALSE}
+url <- "https://d33wubrfki0l68.cloudfront.net/aeab386461820b029b7e7606ccff1286f623bae1/ef0d4/diagrams/join-venn.png"
+```
+
+![](`r url`)
+
+Para ver cómo funcionan, usaremos un ejemplo de tydiverse:
+
+```{r}
+band_members
+band_instruments
+```
+
+Las columnas utilizadas para construir la unión son, por defecto, las que tienen el mismo nombre de columna, en este caso las columnas `name`. Hagamos una unión interna `inner_join` y externa `outer_join`:
+
+```{r}
+inner_join(band_members, band_instruments)
+full_join(band_members, band_instruments)
+```
+
+Y ahora una unión por la derecha `right_join` y por la izquierda `left_join`:
+
+```{r}
+right_join(band_members, band_instruments)
+left_join(band_members, band_instruments)
+```
+
+Si los nombres de las columnas de unión son diferentes en cada data frame, usamos el parámetro **by**:
+
+```{r}
+inner_join(band_members, band_instruments2, by=c("name" = "artist"))
+```
+
+En el resultado, se retiene el nombre de la columna de unión deldata frame izquierdo.
