@@ -54,7 +54,7 @@ elbow.meas <- sapply(testk, function(x){
 Let's plot the value of the performance measure against *k*:
 
 ```{r, fig.height=5, fig.width=5}
-plot(testk, elbow.meas, type="l", xlab="k", ylab="within.ss/totss", xaxt="n", yaxt="n", cex.labels=0.8)
+plot(testk, elbow.meas, type="l", xlab="k", ylab="within.ss/totss", xaxt="n", yaxt="n", cex.lab=0.8)
 axis(1, at=testk, cex.axis=0.6)
 axis(2, las=2, cex.axis=0.6)
 text(4.5, 0.15, "elbow")
