@@ -1,3 +1,3 @@
 # analytics
 
-A repository with contents for a future course on business analytics.
+A repository with contents for a course on business analytics.
