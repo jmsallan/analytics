@@ -1,0 +1,156 @@
+---
+title: "Some data.table usage on nycflights13"
+author: "Jose M Sallan"
+date: "08/04/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This is a small vignette showing some functionalities of data.table. The original reference of the functionalities shown here can be found at:
+
+* Introduction: https://cran.r-project.org/web/packages/data.table/vignettes/datatable-intro.html
+* Reference semantics: https://cran.r-project.org/web/packages/data.table/vignettes/datatable-reference-semantics.html
+
+
+
+# Loading packages and preparing data
+
+We will use `nycflights13` to pick data, and `data.table` to wrangle data.
+
+```{r}
+library(nycflights13)
+library(data.table)
+```
+
+We have to convert data frames into the `data.table` format:
+
+```{r}
+dt_flights <- data.table(flights)
+dt_airlines <- data.table(airlines)
+dt_airports <- data.table(airports)
+```
+
+
+# Obtaining delays
+
+We may want to turn to zero negative delays. We can use two reference semantics syntaxes to do that. The first is:
+
+```{r, eval=FALSE}
+dt_flights[, c("arr_delay", "dep_delay"):=.(ifelse(arr_delay > 0, arr_delay, 0), ifelse(dep_delay > 0, dep_delay, 0))]
+```
+
+and the second (more practical, in my opinion):
+
+```{r}
+dt_flights[, `:=`(arr_delay=ifelse(arr_delay > 0, arr_delay, 0), dep_delay=ifelse(dep_delay > 0, dep_delay, 0))]
+```
+
+Let's look at `dt_flights`:
+
+```{r}
+dt_flights
+```
+
+# Obtaining a specific flight
+
+What was the fourth flight to depart from each origin airport on 13 February?
+
+```{r}
+dt_flights[order(time_hour)][month==2 & day==13, .SD[4], origin]
+```
+
+And the last flight?
+
+```{r}
+dt_flights[order(time_hour)][month==2 & day==13, .SD[.N], origin]
+```
+
+We have use the `.SD` syntax to subset the table internally for each group (see introductory vignette).
+
+# Average delay per destination airport
+
+Let's compute the average and departure delays for each destination airport:
+
+```{r}
+dt_flights[, .(mean(dep_delay), mean(arr_delay)), dest]
+```
+
+This is ugly. Let's consider that we need to remove not available observations and put a name for each variable:
+
+```{r}
+delay_dest <- dt_flights[, .(av_dep=mean(dep_delay, na.rm = TRUE), av_arr=mean(arr_delay, na.rm = TRUE)), dest]
+```
+
+Now this is much nicer:
+
+```{r}
+delay_dest
+```
+
+
+# What is the name of the destination airport with maximum arrival delay?
+
+To get the name of airports we need `dt_airports`:
+
+```{r}
+dt_airports
+```
+
+Let's bind `delay_dest` and the columns we need from `dt_airports` using `dest` and `faa` as binding columns:
+
+```{r}
+delay_dest <- merge(delay_dest, dt_airports[, .(faa, name)], by.x="dest", by.y="faa", all.x=TRUE)
+```
+
+Now we have the name:
+
+```{r}
+delay_dest
+```
+
+Let's order the destination airports by delay:
+
+```{r}
+delay_dest[,.(name, av_arr)][order(-av_arr)]
+```
+
+And pick the name of the first destination airport:
+
+```{r}
+delay_dest[,.(name, av_arr)][order(-av_arr)][1, name]
+```
+
+# What is the name of the airline with maximum arrival delay?
+
+We need to do the same thing for `carrier` as we have done with airports:
+
+```{r}
+delay_airline <- dt_flights[, .(av_dep=mean(dep_delay, na.rm = TRUE), av_arr=mean(arr_delay, na.rm = TRUE)), carrier]
+```
+
+Carrier names are in `dt_airlines`:
+
+```{r}
+dt_airlines
+```
+
+As the merging variables are the same in both data frames, we can override `by.x` and `by.y` here:
+
+```{r}
+delay_airline <- merge(delay_airline, dt_airlines, all = TRUE)
+```
+
+And select the airline with maximum arrival delay:
+
+```{r}
+delay_airline[,.(name, av_arr)][order(-av_arr)]
+delay_airline[,.(name, av_arr)][order(-av_arr)][1, name]
+```
+
