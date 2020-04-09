@@ -1,0 +1,127 @@
+---
+title: "Bayesian prediction"
+author: "Jose M Sallan"
+date: "21/03/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, message=FALSE}
+library(kableExtra)
+library(tidyverse)
+```
+
+
+# Predicting with Bayes' theorem
+
+The **Bayes' theorem** describes the probability of an event, based on prior knowledge of conditions related to that event. It is the base of a **bayesian inference**, which updates the probability for a hypothesis as more evidence becomes available. We can use Bayes' theorem to for classification, obtaining the probability that an observation belongs to a category of the class target, based on the available information about the observation.
+
+# Bayes' theorem
+
+Bayes' theorem is expressed in terms of conditional probabilities. We write the probability of A given that B occurs as $p \left( A | B \right)$. Then, Bayes' theorem is expressed as:
+
+\[ p \left( A \vert B \right) = \frac{p \left(  B \vert A \right) p \left( A \right)}{p \left(  B \right)}
+\]
+
+To illustrate how this theorem helps to classify, let's suppose that we have to code a spam detector, which takes email text as input and classifies the email as spam or ham (junk or non-junk). Being A the event of being an email spam, and B the event of including the word Viagra, we can write Bayes' theorem as:
+
+\[ p \left( \text{spam}\ \vert\  \text{Viagra} \right) = \frac{p \left(  \text{Viagra}\  \vert\  \text{spam} \right) p \left( \text{spam} \right)}{p \left(  \text{Viagra} \right)}
+\]
+
+Let's examine what means each element:
+
+* $p \left( \text{spam} \right)$ is the **prior**, the probability of an email being spam if no other information is available.
+* $p \left(  \text{Viagra}\  \vert\  \text{spam} \right)$ is the **likelihood**, in this case the probability that a spam email contains the word Viagra.
+* $p \left(  \text{Viagra} \right)$ is the **marginal likelihood**, here the probability than an email contains the word Viagra.
+* $p \left( \text{spam}\ \vert\  \text{Viagra} \right)$ is the **posterior**, the probability that an email containing the word Viagra is spam.
+
+Let's apply the formula at the following data:
+
+```{r, echo=FALSE}
+spam_example <- data.frame(class=c("spam", "ham", "total"), Viagra=c(8, 2, 10), notViagra=c(12, 78, 90), total=c(20, 80, 100))
+colnames(spam_example) <- c("class", "Viagra", "not Viagra", "total")
+kable(spam_example) %>% kable_styling(full_width=FALSE) %>% column_spec(1, bold=TRUE) %>% column_spec(4, background = "#C0C0C0") %>% row_spec(3, background = "#C0C0C0")
+```
+
+The **prior** probability of having spam email is 0.2, as 20 out of 100 emails are spam. Let's apply Bayes' theorem to emails containing the Viagra word. We also know that:
+
+* The **likelihood**, that is, the probability that a spam email contains Viagra, is equal to $8/20=0.4$.
+* The **marginal likelihood**, the probability that an email contains the word Viagra is of $10/100=0.1$.
+
+Then, we can compute the posterior, or probability that an email containing te word Viagra is spam, as:
+
+\[ p \left( \text{spam}\ \vert\  \text{Viagra} \right) = \frac{p \left(  \text{Viagra}\  \vert\  \text{spam} \right) p \left( \text{spam} \right)}{p \left(  \text{Viagra} \right)} = \frac{0.4 \times 0.2 }{0.1} = 0.8
+\]
+
+Applying Bayes' theorem, we know that, while the probability of any email being spam is 0.2, if it contains the word Viagra this probability raises to 0.8. If we consider an email spam if its posterior probablity is greater than 0.5, we would classify emails containing Viagra as spam.
+
+# The naive Bayes classifier
+
+The naive Bayes classifier calculates posterior probabilities of a class target for each combination of features (predictor variables) using training data. The assumptions made by this model are somewhat strong:
+
+* All features are equally important.
+* All features are independent.
+
+This strong assumptions can be overcome as we don't need a precise estimation of probability, but a way of deciding if an element belongs to a class. We can assign elements to a class if the probability to belonging to that class is a above a threshold value.
+
+If we use naive Bayes with numeric features, these need to be discretized into a finite number of categories. This process, known as **binning**, is usually done by naive Bayes functions.
+
+If there are no observations of a specific combination of feature levels, the results may be distorted. To avoid that we can use the **Laplace smoothing**, that adds a small number of items (usually one) to the observations of all combinations of features.
+
+# Implementations of naive Bayes
+
+We can implement naive Bayes in R with:
+
+* The `naiveBayes` function of the `e1071` package.
+* The `nb` method of the `caret` package.
+
+## `naiveBayes` on iris
+
+Let's load the libraries first:
+
+```{r, message=FALSE}
+library(e1071)
+library(caret)
+```
+
+We can use the `naiveBayes` function of the `e1071` package to classify each element of `iris` based on their feature values. Then, we use `predict` to obtain the prediction for the train dataset:
+
+```{r}
+iris_nb01 <- naiveBayes(Species ~ ., iris)
+iris_nb01_pred <- predict(iris_nb01, iris)
+```
+
+Then, we use the `ConfusionMatrix` function of `caret` to examine the results:
+
+```{r}
+confusionMatrix(iris_nb01_pred, iris[, 5])
+```
+
+# using `caret` with naive Bayes
+
+We can also use the `train` function of `caret` to apply naive Bayes. We will center and scale features and use cross validation.
+
+```{r}
+features <- iris[,-5]
+class <- iris$Species
+
+iris_nb02 <- train(features, class, 'nb', preProcess = c("center", "scale"), trControl=trainControl(method='cv',number=10))
+iris_nb02_pred <- predict(iris_nb02, features)
+```
+
+Let's see the results:
+
+```{r}
+confusionMatrix(iris_nb02_pred, iris[, 5])
+```
+
+We have obtained the same results with the two implementation of naive Bayes. The naive Bayes classifyer predict the `Species` of `iris` with high accuracy.
+
+

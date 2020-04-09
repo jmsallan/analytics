@@ -1,0 +1,188 @@
+---
+title: "Decision trees and classification rules"
+author: "Jose M Sallan"
+date: "21/03/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Classifying with decision trees and rules
+
+The approach of decision trees and classification rules is similar: we divide data into smaller and smaller groups, so that in each group (most of) the observations belong to the same category of the target class variable.
+
+The output of these techniques is a logical structure of classification, that can be interpreted without statistical knowledge. Being transparent, these techniques can be adequate for business analytic problems like  customer churn or credit scoring.
+
+These techniques are known to work badly for problems with numeric features, or factor features with many levels.
+
+# Measuring the purity of a set
+
+To use decision trees and rules, we need a measure of the **purity** of a subset of observations. The measure most frequently used is **entropy**. If a set of observations has $i=1, \dots, k$ different categories, each with a probability of occurrence $p_i$, the entropy is defined as:
+
+\[ - \displaystyle\sum_{i=1}^k p_i \times log_2 \left( p_i \right) \]
+
+To illustrate, we will define seven sets containing elements of categories `a` and `b`, with different values of purity:
+
+```{r}
+set.seed(2020)
+sets <- lapply(c(0.05, 0.2, 0.3, 0.5, 0.7, 0.8, 0.95), function(x) sample(c("a", "b"), replace = TRUE, 100, prob=c(x, 1-x)))
+```
+
+Let's define a function to compute entropy:
+
+```{r}
+entropy <- function(v){
+  classes <- unique(v)
+  n <- length(v)
+  probs <- sapply(classes, function(x) length(which(v==x))/n)
+  log2.probs <- sapply(probs, function(x) log2(x))
+  entropy <- -sum(probs*log2.probs)
+  return(entropy)
+}
+```
+
+Let's compute the entropy for each set, and put it together with set composition:
+
+```{r}
+table <- data.frame(t(sapply(sets, table)))
+table$entropy <- sapply(sets, entropy)
+table
+```
+
+We see that the purest nodes, the ones with more elements belonging to a category, have lower values of entropy. So classification algorithms will try to define subsets with the lowest value of entropy.
+
+# Decision trees
+
+In decision trees, we use features to build a decision tree through **recursive partitioning**. We start with a root node containing all data, and then we proceed iteratively: at each step we use the non-selected feature most representative of the target class, and partition each node into groups according with features of that value. We proceed until:
+
+* the observations of each leave have a majority of elements of the same class, that is, have a low value of entropy.
+* there are no features left.
+* the tree has grown into a size limit.
+
+When building a decision tree, it may be convenient to prune it, to reduce overfitting to the training test. We have two pruning strategies:
+
+* **Pre-prunning:** stopping when the tree reaches a size limit, or the number of elements in each leave is too small.
+* **Post-prunning:** a process consisting of reducing the number of branches based on error rates (too technical to be described here).
+
+# Classification rules
+
+In classification rules, we represent knowledge about the sample as a set of **if-then statements**. The if term contains a logical operator based on a combination of feature values, and the then assigns elements for which the statement is true to a class.
+
+Classification rules proceed identifying a rule that fits a subset of the data, and then looking for other rules for the rest of the data. We can obtain classification rules from a decision tree, using the rules that define each leaf of the data.
+
+# Implementation of decision trees and classification rules
+
+The most used package to implement decision trees and classification rules is the `C50` package, that implements the C5.0 algorithm. A vignette of the `C50` package is available on CRAN:
+ 
+https://cran.r-project.org/web/packages/C50/vignettes/C5.0.html
+
+## Synthetic data
+
+To show how this algorithms work, we will create a set of synthetic data:
+
+```{r, message=FALSE}
+library(tidyverse)
+```
+
+```{r}
+n <- 400
+set.seed(2020)
+x <- c(runif(n*0.5, 0, 10), runif(n*0.25, 4, 10), runif(n*0.25, 0, 6))
+y <- c(runif(n*0.5, 0, 5), runif(n*0.25, 4, 10), runif(n*0.25, 4, 10))
+class <- as.factor(c(rep("a", n*0.5), c(rep("b", n*0.25)), c(rep("c", n*0.25))))
+
+features <- tibble(x=x, y=y)
+```
+
+Let's examine the data set:
+
+```{r}
+tibble(x=x, y=y, class=class) %>% ggplot(aes(x, y, col=class)) + geom_point() + theme_bw()
+```
+
+We see that the classifying variable has three different levels. The task of the classifying algorithm is to predict the level of each observation based on the features.
+
+## Pre-processing: binning data
+
+In this case, the variables have a similar range of values. Let's show it with the skim function of the skimr package:
+
+```{r}
+library(skimr)
+skim(features)
+```
+
+As classification algorithms work badly with contiuous data, we'll bin these variables into quartiles, thus creating four groups for each variable:
+
+```{r}
+binned_features <- features %>% mutate(bin_x=ntile(x, 4), bin_y=ntile(y, 4)) %>% select(bin_x, bin_y)
+```
+
+## Classification tree
+
+Let's apply a classification tree to this dataset. We do that setting `rules=FALSE`:
+
+```{r}
+library(C50)
+ct <- C5.0(binned_features, class, rules=FALSE)
+```
+
+And let's see how has been classified data:
+
+```{r}
+summary(ct)
+```
+
+We can see that the algorithm has proceeded as follows:
+
+* First the algorithm brances by variable `bin_y`. Elements in which `bin_y <= 2` are classified as `a`.
+* In the next iteration, the leave `bin_y > 2` is branched by variable `bin_x`. Elements of this node in which `bin_x <= 2` are classified as `c`, and the elements where `bin_x > 2` as `b`.
+
+A drawback of this classifyer is that it can only perform **axis-parallel splits** to create the groups.
+
+## Decision rules
+
+We can apply a decision rule classiflyer making `rules=TRUE`:
+
+```{r}
+dr <- C5.0(binned_features, class, rules=TRUE)
+```
+
+Let's see the summary:
+
+```{r}
+summary(dr)
+```
+
+In the summary of the function we can read the three decision rules that we have defined to classify data. In this case, the rules classify data in the same way as the decision tree. The summary of the function itself shows that, as 63 out of 400 elements have been classified incorrectly, the accuracy is 84.25%.
+
+## Non-binned features
+
+If we use continuous features instead of binned features, we see that the algorithm finds a specific cutting point for each variable.
+
+```{r}
+ct_nb <- C5.0(features, class, rules=FALSE)
+summary(ct_nb)
+```
+
+```{r}
+dr_nb <- C5.0(features, class, rules=TRUE)
+summary(dr_nb)
+```
+
+
+## Using caret
+
+We can perform a similar analysis using `caret` in the following way:
+
+```{r, message=FALSE}
+library(caret)
+dt <- train(data.frame(binned_features), class, method = "C5.0", trControl = trainControl("repeatedcv", number = 3, repeats = 3), tuneGrid = expand.grid(model=c("tree", "rules"), trials=1, winnow=FALSE))
+caret_predict <- predict(dt, binned_features)
+confusionMatrix(caret_predict, class)
+```

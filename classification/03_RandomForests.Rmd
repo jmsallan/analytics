@@ -1,0 +1,227 @@
+---
+title: "Classifying with random forests"
+author: "Jose M Sallan"
+date: "28/03/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE}
+library(tidyverse)
+```
+
+# Bootstrapping
+
+Random forests is a machine learning technique that applies the concept of bootstrapping. In statistics, bootstrapping is to define a test or metric relying on random sampling with replacement. When we apply bootstrapping we obtain subsamples of the population, so that an element of the population can appear in more than one subset.
+
+To illustrate, let's define a `set` to bootstrap. The set itself has been defined with sampling with replacement.
+
+```{r}
+set.seed(2020)
+set <- sample(1:1000, 100, replace = TRUE)
+```
+
+We can define a function to boostrap a set:
+
+```{r}
+sampling_set <- function(set, n){
+  set_size <- length(set)
+  elements <- sample(1:set_size, n, replace = FALSE)
+  subset <- set[elements]
+  return(subset)
+}
+```
+
+Let's see of this function obtains a subset of the greater set:
+
+```{r}
+subset <- sampling_set(set, 10)
+sort(set)
+sort(subset)
+```
+
+# Classifying with random forests
+
+When applied to classification problems, random forests try to improve the performance of classification algorithms like the obtained with the `C5.0` function training many different decision trees with random sampling. The name *forest* comes from having many trees in the algorithm. More specifically we apply random forests for classification as follows:
+
+1. Fix the model variables: the number of trees to train `ntree` and the number of variables to choose in each tree `mtry`.
+2. Repeat `ntree` times:
+    1. Select `mtry` variables randomly
+    2. Train a decision tree with the selected variables.
+3. Assign a class to each member of the considered data set using a majority rule.
+
+To clarify the concept of majority rule, let's suppose that the categories on the class variable are *A* and *B*, and that we have trained `ntree=100` trees. For a specific element of the population, 60 trees have classified it as *A* and 40 as *B*. Then, applying the majority rule, the random forest algorithm will assign to the element the category *A*.
+
+Random forests is an example of **meta-learning** algorithms. The idea of meta-learning is combining an ensemble of weak learners, to create a stronger learner. Another meta-learning technique is **boosting**, which is implemented in the `C5.0` algorithm of decision trees.
+
+Random forests can be more precise than decision trees, but they take more time to run. Random forests can be adequate for datasets with many variables.
+
+There are many packages implementing random forest and its variants in R. We can access to many of them using caret. Here we will use the randomForest package to tackle a classification problem in a dataset with many variables.
+
+# The `Sonar` data
+
+The dataset we will analyse is `Sonar`, which is available from the mlbench package.
+
+```{r}
+library(mlbench)
+data("Sonar")
+```
+
+The task is to train a network to discriminate between sonar signals bounced off a metal cylinder and those bounced off a roughly cylindrical rock. Each of the 208 elements is a set of 60 variables `V1` to `V60` in the range 0.0 to 1.0. Each number represents the energy within a particular frequency band, integrated over a certain period of time. The integration aperture for higher frequencies occurs later in time, since these frequencies are transmitted later during the chirp.
+
+The `Class` category label associated with each element contains the letter *R* if the object is a rock and *M* if it is a mine (metal cylinder). So our work is to try to know if the object detected in an observation is a rock or a mine using the information of the features `V1` to `V60`. The numbers in variable names are in increasing order of aspect angle, but they do not encode the angle directly.
+
+Let's load caret to split the dataset into train and test:
+
+```{r, message=FALSE}
+library(caret)
+set.seed(2020)
+inTrain <- createDataPartition(Sonar$Class, p=0.8, list = FALSE)
+Sonar_train <- Sonar[inTrain, ]
+Sonar_test <- Sonar[-inTrain, ]
+```
+
+
+# Classifying `Sonar` with random forests
+
+Let's load the randomForest library to use random forests.
+
+```{r, message=FALSE}
+library(randomForest)
+```
+
+Random forests are trained using the `randomForest` function. Some things to know about this function:
+
+* The model is entered as a formula. We will use all the features for classification, so we will use the formula `Class ~ .`. When we use the dot in a formula, this means that we select all variables except `Class` as independent variables.
+* If the dependent variable is a factor, as in this dataset, the function considers that is facing a classification problem.
+* The default of `ntree` is 500. For classification problems, `mtry` is set to the squared root of the number of variables, rounding by default. Here we will set `ntree=100` to accelerate the run of the algorithm.
+
+Let's build a random forest model for `Sonar_train`:
+
+```{r}
+set.seed(2020)
+Sonar_rf01 <- randomForest(Class ~ ., Sonar_train, ntree=100)
+```
+
+Let's use the confusion matrix of caret to assess algorithm performance on the train set. Note that the output of randomForest contains the prediction for the train set:
+
+```{r}
+confusionMatrix(Sonar_rf01$predicted, Sonar_train$Class)
+```
+
+# Random forests with `caret`
+
+The caret package has many implementations of the random forest algorithm and its variants. A list of them is in:
+
+https://topepo.github.io/caret/train-models-by-tag.html#Random_Forest
+
+Here we will use the randomForest package in `caret` making `method="rf"`. In the tuning grid we will place mtry values from 2 to 10.
+
+```{r}
+control01 <- trainControl(method='repeatedcv', 
+                        number=5, 
+                        repeats=3)
+
+rf_grid <- expand.grid(mtry=2:10)
+```
+
+Let's train the model with `ntree=100` for speed.
+
+```{r}
+set.seed(2020)
+Sonar_rfCaret01 <- train(Class ~ ., Sonar_train, method="rf", trControl=control01, tuneGrid=rf_grid, ntree=100)
+```
+
+Let's see a plot with the values of accuracy for each element of the tuning grid. The best value is obtained with `mytr=3`.
+
+```{r}
+plot(Sonar_rfCaret01)
+```
+
+For some reason, the method `rf` in `caret` does not provide adequate predicted values for the training test. Let's make the predictions on the test set instead:
+
+```{r}
+Sonar_rfCaret01_predict_test <- predict(Sonar_rfCaret01, Sonar_test)
+confusionMatrix(Sonar_rfCaret01_predict_test, Sonar_test$Class)
+```
+
+# Training for a specific metric
+
+The resulting classification has a good value of accuracy than the first run of the random forest, but a lower value of sensitivity. Sensitivity here means the fraction of mines that we detect with the sonar. For obvious reasons, here we may prefer this metric to accuracy to train our model. We can tell `caret` to find the best model for a metric different than accuracy, for instance sensitivity To do so, we need a different train control:
+
+```{r}
+control2 <- trainControl(method='repeatedcv', 
+                         number=5, 
+                         repeats=3, summaryFunction = twoClassSummary, classProbs = TRUE)
+```
+
+And now we train a new model telling `caret` to optimize sensitivity:
+
+```{r}
+set.seed(2020)
+Sonar_rfCaret02 <- train(Class ~ ., Sonar_train, method="rf", trControl=control2, tuneGrid=rf_grid, metric="Sens")
+```
+
+Let's plot the results. The best model for specificity is for `mtry=2`.
+
+```{r}
+plot(Sonar_rfCaret02)
+```
+
+Here are the results of applying this new model to the test set. We see that we get the same value of sensitivity than in the previous model, so that we cannot go further than that value for this model and this dataset. Note that the value of accuracy is smaller than in the previous model.
+
+```{r}
+Sonar_rfCaret02_predict_test <- predict(Sonar_rfCaret02, Sonar_test)
+confusionMatrix(Sonar_rfCaret02_predict_test, Sonar_test$Class)
+```
+
+# Variable importance in random forests
+
+In random forest models, we can obtain information about the role of features or independent variables in prediction. There are two metrics for this:
+
+* **minimal depth:** in classification trees, we consider first the most influential variables to split the data. The minimal depth of a variable is equal to the first time the variable is used to split the tree. As each variable can behave differently in each trained tree, we have a minimal depth distribution for each variable.
+
+* **variable importance:** the variable importance in a classification tree is calculated considering the average incrase in node purity a split in that variable causes. Again, we will have a value of variable importance for each tree, and a distribution of node importance.
+
+All these metrics can be obtained with the `randomForestExplainer` package:
+
+```{r, message=FALSE}
+library(randomForestExplainer)
+```
+
+A beautiful vignette explaining this package (and explaining random forests, too) can be found at:
+
+https://cran.rstudio.com/web/packages/randomForestExplainer/vignettes/randomForestExplainer.html
+
+To illustrate the output of the package we will train a random forest model with a large value of trees (`ntree=1000`) for `mtry=3`:
+
+```{r}
+Sonar_rf02 <- randomForest(Class ~ ., Sonar_train, ntree=1000, localImp=TRUE)
+```
+
+Let's start examining minimal depth:
+
+```{r}
+min_depth_frame_rf02 <- min_depth_distribution(Sonar_rf02)
+min_depth_frame_rf02 %>% top_n(10)
+```
+
+In `min_depth_frame_rf02` we have the minimal depth of each variable, for each trained tree. A nice way to examine minimal depth is with a plot. The number of variables to plot can be controlled with the `k` parameter.
+
+```{r}
+plot_min_depth_distribution(min_depth_frame_rf02)
+```
+
+For more elements of variable importance analysis, you can go to:
+
+https://cran.rstudio.com/web/packages/randomForestExplainer/vignettes/randomForestExplainer.html
+
+
+

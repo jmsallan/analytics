@@ -1,0 +1,122 @@
+---
+title: "Decision trees winnowing and boosting"
+author: "Jose M Sallan"
+date: "3/28/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r, message=FALSE}
+library(tidyverse)
+library(C50)
+library(caret)
+```
+
+# Winnoving features and boosting observations
+
+The performance of classification trees obtained with the `C50` package can be improved choosing what features (variables) to include in the analysis and to improve the performance of trees with boosting.
+
+The details of those processes can be learned at the C.50 tutorial:
+
+https://www.rulequest.com/see5-unix.html
+
+Here we will describe them brefly and see how can we evaluate them with `caret`. The relevant R libraries are:
+
+```{r, message=FALSE}
+library(tidyverse)
+library(C50)
+library(caret)
+```
+
+## Winnoving features
+
+With winnoving, we select a subset of variables to build the decision tree. Quoting the C.50 tutorial:
+
+> When there are numerous alternatives for each test in the tree or ruleset, it is likely that at least one of them will appear to provide valuable predictive information. In applications like these it can be useful to pre-select a subset of the attributes that will be used to construct the decision tree or ruleset. The C5.0 mechanism to do this is called "winnowing" by analogy with the process for separating wheat from chaff (or, here, useful attributes from unhelpful ones).
+
+The use of winnowing is recommended for large datasets, as quoted in the tutorial:
+
+> Since winnowing the attributes can be a time-consuming process, it is recommended primarily for larger applications (100,000 cases or more) where there is reason to suspect that many of the attributes have at best marginal relevance to the classification task.
+
+
+
+## Boosting observations
+
+Boosting is a meta-learning technique to improve the performance of a learner. With boosting we generate several classifiers, rather than just one. The implementation of boosting of `C5.0` proceeds iteratively:
+
+1. The initial decision tree is obtained with the C5.0 algorithm.
+2. We examine the observations that have not been classified correctly, and increase their weight to compute node purity. We train a new decision tree using the obtained weights.
+3. We stop when the accuracy of the obtain classifyer is highly accurate or too inaccurate, or when we reach a number of trials.
+
+If we stop the boosting because of too high or too low accuracy, we obtain a warning like:
+
+> 34: 'trials' should be <= 3 for this object. Predictions generated using 3 trials
+
+
+# The `Sonar` data
+
+The dataset we will analyse is `Sonar`, which is available from the mlbench package.
+
+```{r}
+library(mlbench)
+data("Sonar")
+```
+
+The task is to train a network to discriminate between sonar signals bounced off a metal cylinder and those bounced off a roughly cylindrical rock. Each of the 208 elements is a set of 60 variables `V1` to `V60` in the range 0.0 to 1.0. Each number represents the energy within a particular frequency band, integrated over a certain period of time. The integration aperture for higher frequencies occurs later in time, since these frequencies are transmitted later during the chirp.
+
+The `Class` category label associated with each element contains the letter *R* if the object is a rock and *M* if it is a mine (metal cylinder). So our work is to try to know if the object detected in an observation is a rock or a mine using the information of the features `V1` to `V60`. The numbers in variable names are in increasing order of aspect angle, but they do not encode the angle directly.
+
+# Using caret to evaluate winnowing and boosting
+
+Let's load `caret` to split the dataset into train and test:
+
+```{r, message=FALSE}
+library(caret)
+set.seed(2020)
+inTrain <- createDataPartition(Sonar$Class, p=0.8, list = FALSE)
+Sonar_train <- Sonar[inTrain, ]
+Sonar_test <- Sonar[-inTrain, ]
+```
+
+Now in the tuning grid, we include values for `trials` and `winnowing`:
+
+```{r}
+control <- trainControl("repeatedcv", number=5, repeats=10)
+C50_grid <- expand.grid(model=c("tree", "rules"), trials=c(1, 5, 10), winnow=c(TRUE, FALSE))
+```
+
+The tuning grid now looks like:
+
+```{r}
+C50_grid
+```
+
+The evaluation of the decision trees is as follows (we have silenced warnings):
+
+```{r, warning=FALSE}
+Sonar_C50 <- train(Class ~ ., Sonar_train, method = "C5.0", trControl = control, tuneGrid = C50_grid)
+```
+
+The results of the model are obtained presented typing `Sonar_C50`. In the last line appear the values of the model of best accuracy:
+
+```{r}
+Sonar_C50
+```
+
+We can also see a graphical presentation of the accuracy of each model:
+
+```{r}
+plot(Sonar_C50)
+```
+
+Finally, let's examine the prediction for the test set:
+
+```{r}
+Sonar_C50_predict <- predict(Sonar_C50, Sonar_test)
+confusionMatrix(Sonar_C50_predict, Sonar_test$Class)
+```
+
+The results are good, but worse than the obtained with random forests. See vignette **Classifying with random forests** for a classification of the same dataset using random forests.
