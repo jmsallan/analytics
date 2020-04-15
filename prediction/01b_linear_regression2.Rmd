@@ -1,0 +1,204 @@
+---
+title: "Prediction with regression (2)"
+author: "Jose M Sallan"
+date: "09/04/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Insurance data
+
+To illustrate how can we use linear regression to predict a numerical variable, we will use a dataset of insurance charges provided by professor Eric Suess. The dataset contains insurance charges from customers of a medical insurance company, together with variables describing each customer:
+
+https://www.kaggle.com/noordeen/insurance-premium-prediction
+
+The dataset is wrapped in BAdatasets package under the name InsuranceCharges. Let's name it insurance:
+
+```{r}
+library(BAdatasets)
+insurance <- InsuranceCharges
+```
+
+And let's examine the data:
+
+```{r, message=FALSE}
+library(skimr)
+skim(insurance)
+```
+
+The dataset contains three factor variables:
+
+* `sex` for gender
+* `smoker` indicating if the customer smokes or not
+* the `region` the customer comes from
+
+and three numerical variables:
+
+* `age`
+* the body mass index `bmi` (see https://en.wikipedia.org/wiki/Body_mass_index)
+* number of `children`
+
+The variable to predict is `charges`, which is also numeric.
+
+As people with a bmi equal or larger than 30 are considered obese, we will create a factor variable `bmi30` equal to one if `bmi` is equal or larger than 30, and zero otherwise.
+
+```{r, message=FALSE}
+library(tidyverse)
+insurance <- insurance %>% mutate(bmi30 = as.factor(ifelse(insurance$bmi >= 30, 1, 0)))
+```
+
+# Predicting with regression using `caret`
+
+We will use caret to apply linear regression to this dataset, so we can create the data partition and assess model performance.
+
+```{r, message=FALSE}
+library(caret)
+```
+
+## Data partition
+
+Data partition is created from the variable to predict. Here we put 80% of the dataset into train set `insurance_train`, and the rest in test set `insurance_test`.
+
+```{r}
+set.seed(1111)
+inTrain <- createDataPartition(insurance$charges, p=0.8, list=FALSE)
+insurance_train <- insurance[inTrain, ]
+insurance_test <- insurance[-inTrain, ]
+```
+
+## First models
+
+Let's build a first model `mod01` with some variables. The predictions of the model on the train set are in `pr_train01`. Note that we have centered and scaled variables for a better processing:
+
+```{r}
+mod01 <- train(charges ~ age + smoker, insurance_train, method="lm", preProcess=c("center", "scale"))
+pr_train01 <- predict(mod01, insurance_train)
+```
+
+We assess model performance on the train test with postResample:
+
+```{r}
+postResample(pred = pr_train01, insurance_train$charges)
+```
+
+Let's add the rest of variables into the model, and see if that improves prediction:
+
+```{r}
+mod02 <- train(charges ~ sex + smoker + region + age + bmi + children, method="lm", insurance_train, preProcess=c("center", "scale"))
+pr_train02 <- predict(mod02, insurance_train)
+postResample(pred = pr_train02, insurance_train$charges)
+```
+
+## Adding a quadratic term
+
+Sometimes the prediction can improve if we add powered values (squared, cubed, etc.) of some variables. To do so, it is convenient to center variables, as we are doing. Here we will add a squared term for `age`:
+
+There are two ways of adding polynomial terms.
+
+* Inserting in the formula of `lm` something like `age + I(age^2)`
+* Inserting in the formula of `lm` something like `poly(age, 2)`
+
+The second way inserts orthogonal polynomials, so that they are uncorrelated and we can appreciate the effect of each variable better. In prediction tasks both methods lead to the same values of prediction.
+
+```{r}
+mod03 <- train(charges ~ sex + smoker + region + poly(age, 2) + bmi + children, method="lm", insurance_train, preProcess=c("center", "scale"))
+```
+
+Let's see how the model looks like:
+
+```{r}
+summary(mod03$finalModel)
+```
+
+And the results of the prediction:
+
+```{r}
+pr_train03 <- predict(mod03, insurance_train)
+postResample(pred = pr_train03, insurance_train$charges)
+```
+
+We have obtained a marginal improvement of prediction.
+
+## Adding an interaction term
+
+Let's examine the relationship between the dependent variable `charges` and `bmi`, and how `smoke` affects this relationship:
+
+```{r}
+insurance_train %>% ggplot(aes(bmi, charges, col=smoker)) + geom_point() + geom_smooth(method="lm") + theme_bw()
+```
+
+We see that the effect of `bmi` in insurance `charges` is more acute for smokers that for non-smokers. That means that there is an **interaction effect** of `smoker` in the relationship between `bmi` and `charges`. Sometimes we say that `smoker` **moderates** the relationship between `bmi` and `charges`.
+
+We account for interaction terms adding a `bmi*smoker` term in the formula, and deleting `bmi` and `smoker`:
+
+```{r}
+mod04 <- train(charges ~ sex + region + poly(age, 2) + bmi*smoker + children, method="lm", insurance_train, preProcess=c("center", "scale"))
+```
+
+Let's see how the model looks like. We see that by adding `bmi*smoker` we have incorporated `bmi`, `smoker` and the interaction term `bmi:smoker`. We see that this interaction effect is significant in the regression equation.
+
+
+```{r}
+summary(mod04$finalModel)
+```
+
+We can see that the prediction on the train set has significantly improved:
+
+```{r}
+pr_train04 <- predict(mod04, insurance_train)
+postResample(pred = pr_train04, insurance_train$charges)
+```
+
+## A final model
+
+The model can still be improved by replacing `bmi` by `bmi30`:
+
+```{r}
+mod05 <- train(charges ~ sex + region + poly(age, 2) + bmi30*smoker + children, method="lm", insurance_train, preProcess=c("center", "scale"))
+```
+
+Now we attain the best prediction scores on the train set.
+
+```{r}
+pr_train05 <- predict(mod05, insurance_train)
+postResample(pred = pr_train05, insurance_train$charges)
+```
+
+Let's compare the observed and predicted charges for this model. We have identified obese patients:
+
+```{r}
+insurance_train <- insurance_train %>% mutate(pred=pr_train05)
+insurance_train %>% ggplot(aes(charges, pred, col=bmi30)) + geom_point() + theme_bw() + labs(title="prediction of insurance charges by regression (train set)", x= "observed charges", y="predicted charges")
+```
+
+There is a subset of observations with higher charges than expected. This subset cannot be identified with the available data.
+
+## Predicting the test set
+
+Finally, we can apply our model to the test set:
+
+```{r}
+pr_test05 <- predict(mod05, insurance_test)
+```
+
+The predicition for the test set is slightly worse than for the train set:
+
+```{r}
+postResample(pred = pr_train05, insurance_train$charges)
+postResample(pred = pr_test05, insurance_test$charges)
+```
+
+And we observed a similar pattern than in the train test for the observed vs predicted plot:
+
+```{r}
+insurance_test <- insurance_test %>% mutate(pred=pr_test05)
+insurance_test %>% ggplot(aes(charges, pred, col=bmi30)) + geom_point() + theme_bw() + labs(title="prediction of insurance charges by regression (test set)", x= "observed charges", y="predicted charges")
+```
+

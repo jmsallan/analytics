@@ -1,0 +1,109 @@
+---
+title: "Prediction with regression (1)"
+author: "Jose M Sallan"
+date: "09/04/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Linear regression
+
+Linear regression is a linear approach to modelling the relationship between a scalar **response** or **dependent** variable, and a set of **explanatory** or **independent** variables.
+
+## Uses of linear regression
+
+The main uses of linear regression are:
+
+* To **explain** the relationship between the response and the explanatory variables. This is the approach of scientific research to linear regression. Usually we consider that a relationship between explanatory and response variables exists when the linear regression model explains the response better than the response mean, and when the regression coefficient of each explanatory variable is significantly different from zero.
+* To **predict** the values of the dependent variable, using the values of the independent variables. This is the approach of machine learning to linear regression, so it is the approach we will consider here.
+ 
+## Generalized linear models
+
+A requirement of linear regression is that the error of the response variable must follow a normal distribution. Generalized linear models allow extending the framework of linear regression to other response variables. The most common are:
+
+* **Logistic regression:** the response variable takes values zero and one, and the model predicts the probability of an observation taking the value 1 as a function of independent variables. Logistic regression can be used for classification problems.
+
+* **Poisson regression:** the response variable is a count of occurrences in space and time, and therefore it cannot be negative.
+
+In this document we will stick to linear regression to predict numeric outcomes.
+
+# Predicting with OLS
+
+Specifying a linear regression model consists of finding estimators $b_1, \dots, b_p$ for the regression coefficients $\beta_1, \dots, \beta_p$ relating dependent variable and independent variables for a sample of $i=1, \dots, n$ observations:
+
+\[ y_i = \beta_0 + \beta_1x_{1i} + \beta_2x_{21} + \dots + \beta_px_{p1} + \varepsilon_i\]
+
+The prediction of a value of the response variable will be:
+
+\[ \hat{y}_i = b_0 + b_1x_{1i} + b_2x_{2i} + \dots + b_px_{pi}\]
+
+The **ordinary least-squares estimator (OLS)** selects the values of $b_1, \dots, b_p$ that minimizes the sum of squares of the deviations between response and predicted value:
+
+\[ \displaystyle\sum_{i=1}^n \left( y_i - \hat{y}_i \right)^2 \]
+
+In R, we use the `lm` function to obtain these estimators. Let's see an application with the `mtcars` dataset, using fuel consumption `mpg` as dependent variable:
+
+```{r}
+m <- lm(mpg ~., mtcars)
+m
+```
+
+We can use the `predict` function to get the predicted values for each observation.
+
+```{r, message=FALSE}
+library(tidyverse)
+mpg_predicted <- predict(m, mtcars)
+table_mtcars <- data.frame(mpg=mtcars$mpg, mpg_predicted=mpg_predicted)
+table_mtcars %>% ggplot(aes(mpg, mpg_predicted)) + geom_point() + labs(title="prediction of mpg", x="observed value", y="predicted value") + theme_bw()
+```
+
+# Measures of performance for prediction
+
+The most popular measures of performance of prediction are:
+
+* **Mean absolute error (MAE)**: the average of the absolute value of prediction error $\hat{y}_i - y_i$. Good predictions have small values of MAE.
+* **R squared**: the square of the correlation between observed and predicted values. Good predictions have values of R squared closer to one.
+* **Root mean squared error (RMSE)**: the square root of the mean of squared errors for each observation. Good predictions have small values of RMSE.
+
+Let's compute each parameter for mtcars. First we compute the errors, absolute value of errors and errors squared:
+
+```{r}
+table_mtcars <- table_mtcars %>% mutate(error = mpg_predicted - mpg, abs_error = abs(error), sq_error = error^2)
+table_mtcars
+```
+
+And then obtain the three metrics:
+
+```{r}
+table_mtcars %>% summarise(RMSE = sqrt(mean(sq_error)), R2 = cor(mpg, mpg_predicted)^2, MAE = mean(abs_error))
+```
+
+# Linear regression with `caret`
+
+We can use caret to perform linear regression:
+
+```{r, message=FALSE}
+library(caret)
+m_caret <- train(mpg ~ ., data=mtcars, method = "lm")
+```
+
+To obtain the predicted values we use `predict` in the same way as before:
+
+```{r}
+mpg_pred_caret <- predict(m_caret, mtcars)
+```
+
+And to obtain the performance metrics we use `postResample`:
+
+```{r}
+postResample(pred=mpg_pred_caret, obs=mtcars$mpg)
+```
+
+The performance metrics have the same values as the ones calculated in the previous section.
