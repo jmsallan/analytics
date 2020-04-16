@@ -1,0 +1,193 @@
+---
+title: "Prediction with trees and forests"
+author: "Jose M Sallan"
+date: "09/04/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = FALSE)
+```
+
+# `WineQuality` dataset
+
+Let's start loading the required packages: `tidyverse` for data wrangling and plotting, `BAdatasets` for data and `caret` for machine learning.
+
+```{r, message=FALSE}
+library(tidyverse)
+library(BAdatasets)
+library(caret)
+```
+
+We will use the `WineQuality` dataset, that contains two datasets with chemical properties of red and white vinho verde wine samples, from the north of Portugal. Here we will use the dataset of `red` wines:
+
+```{r}
+red <- WineQuality$red
+red
+```
+
+The variable to predict is the `quality` of each sample:
+
+```{r}
+ggplot(red, aes(quality)) + geom_bar()
+```
+
+Let's split the dataset into test and train sets:
+
+```{r, message=FALSE}
+library(caret)
+set.seed(2020)
+inTrain <- createDataPartition(red$quality, p=0.8, list = FALSE)
+red_train <- data.frame(red[inTrain, ])
+red_test <- data.frame(red[-inTrain, ])
+```
+
+We will try to predict the value of `quality` using trees for numerical prediction.
+
+
+# Predicting with trees
+
+We have seen that decision trees can be a powerful strategy for classification tasks. We can apply a similar strategy for prediction: we divide data into smaller and smaller groups, so that in each group (most of) the observations have similar values of the predicted variable. Then, we assign to the elements of each subset the average value of the variable. The output of these techniques is a logical, tree-like structure of classification, that can be interpreted without statistical knowledge. 
+
+To apply trees to prediction, we need an homogeneity metric of the elements of a subset. While in classification we use entropy, in prediction we use the **standard deviation** of the predicted variable.
+
+To choose the variable to split, and the value of splitting for continuous variables, we use metrics like **standard deviation reduction (SDR)**. If we split a node $T$ into $T_i$ nodes, with a number of elements $\lvert T \lvert$ and $\lvert T_i \lvert$, SDR is equal to:
+
+\[ SDR = sd\left( T \right) - \displaystyle\sum_i \frac{\lvert T \lvert}{\lvert T_i \lvert} sd\left( T_i \right) \]
+
+where $sd$ is the standard deviation of the predicted variable in each subset.
+
+## Regression trees
+
+The application of trees to prediction is known as **regression trees**, although it does not have relationship with linear regression. Regression trees are implemented as a part of the classification and regression tree (CART) algorithm. In R, they are implemented in the `rpart` package.
+
+## Random forests
+
+Like in classification, we can foster the performance of regression trees using random forests. In random forests, we use many decision trees to estimate the predicted variable, and return an estimate for each element as the average of the predictions of each tree. More specifically, regression trees work as follows:
+
+1. Fix the model variables: the number of trees to train `ntree` and the number of variables to choose in each tree `mtry`.
+2. Repeat `ntree` times:
+    1. Select `mtry` variables randomly.
+    2. Train a decision tree with the selected variables.
+3. Assign a value of the predicted variable to each member of the dataset averaging the predictions for each tree.
+
+To implement random forests in prediction, we can use the `rf` package. The package implements classification or prediction depending of the type of the target variable: it applies classification if the target is a factor, and prediction if it is a numeric.
+
+# Regression trees in `WineQuality`
+
+Let's apply regression trees to the red dataset. First we will use the `rpart` package, and then we will tune the regression tree with `caret`. 
+
+## Using `rpart`
+
+Let's load the packages for building and plotting regression trees.
+
+```{r, message=FALSE}
+library(rpart)
+library(rpart.plot)
+```
+
+Let's train a regression tree with the `rpart` function using all features:
+
+```{r}
+red_rpart01 <- rpart(quality ~ ., red_train)
+```
+
+The results of the model can be seen clearer using a plot created with `rpart.plot`:
+
+```{r}
+rpart.plot(red_rpart01, digits=4, fallen.leaves = TRUE, type =3, extra=101)
+```
+
+The result is a tree-like structure, coming from successive partitions of subsets.
+
+We can assess the performance of the classification on the train set using `predict` to obtain the prediction and `postResample` to assess performance.
+
+```{r}
+red_rpart01_pr <- predict(red_rpart01, red_train)
+postResample(red_rpart01_pr, red_train$quality)
+```
+
+## Tuning the regression tree
+
+We can tune rpart with a complexity parameter `cp`, that regulates pruning (too technical to be discussed here). We use cross validation to tune the model with a grid of several values of `cp`.
+
+```{r}
+set.seed(2020)
+red_rpart02 <- train(quality ~ ., red_train, method="rpart", trControl=trainControl(method='repeatedcv', number=3, repeats=3), tuneGrid=expand.grid(cp=seq(0.001, 0.02, by=0.001)))
+```
+
+The results of the tuning are tht the best prediction is achieved with `cp=0.01`.
+
+```{r}
+plot(red_rpart02)
+```
+
+We see that the resulting model is the same as the obtained previously...
+
+```{r}
+rpart.plot(red_rpart02$finalModel) #same as obtained with the other model
+```
+
+... and so are the results for the training set.
+
+```{r}
+red_rpart02_pr <- predict(red_rpart02, red_train)
+postResample(red_rpart02_pr, red_train$quality)
+```
+
+## Results on the train and test sets
+
+Let's see the results for the test set:
+
+```{r}
+red_rpart02_prtest <- predict(red_rpart02, red_test)
+postResample(red_rpart02_prtest, red_test$quality)
+```
+
+The results for the test set are much worse than for the train set, meaning that the model is overfitted to the train set. To illustrate this, let's see how has been the prediction in the train test:
+
+```{r,, message=FALSE}
+library(gridExtra)
+plot.train <- data.frame(quality=red_train$quality, pred=red_rpart02_pr) %>% ggplot(aes(quality, pred)) + geom_point() + theme_bw() + labs(title="prediction on train set (rpart)", x="observed quality", y ="predicted quality") + ylim(3, 8)
+plot.test <- data.frame(quality=red_test$quality, pred=red_rpart02_prtest) %>% ggplot(aes(quality, pred)) + geom_point() + theme_bw() + labs(title="prediction on test set (rpart)", x="observed quality", y ="predicted quality") + xlim(3, 8) + ylim(3, 8)
+grid.arrange(plot.train, plot.test, nrow=1)
+```
+
+# Random forests on `WineQuality`
+
+Let's try random forest for this dataset using `caret` with a range of values `mtry` adequate for the number of features of the dataset.
+
+```{r}
+set.seed(2020)
+red_rf01 <- train(quality ~ ., red_train, method="rf", trControl=trainControl(method='repeatedcv', number=3, repeats=3), tuneGrid=expand.grid(mtry=c(2:6)))
+```
+
+Let's see the results:
+
+```{r}
+plot(red_rf01)
+```
+
+And let's compare the performance on the train and test sets:
+
+```{r}
+red_rf01_pr <- predict(red_rf01, red_train)
+postResample(red_rf01_pr, red_train$quality)
+red_rf01_prtest <- predict(red_rf01, red_test)
+postResample(red_rf01_prtest, red_test$quality)
+```
+
+The random forest model overfits to the train set, although the results are much better in the test set than the classification algorithm. The random forest model performs better on the test set than a linear regression algorithm, with and without regularization.
+
+```{r}
+plot.train.rf <- data.frame(quality=red_train$quality, pred=red_rf01_pr) %>% ggplot(aes(quality, pred)) + geom_point() + theme_bw() + labs(title="prediction on train set (rf)", x="observed quality", y ="predicted quality")
+plot.test.rf <- data.frame(quality=red_test$quality, pred=red_rf01_prtest) %>% ggplot(aes(quality, pred)) + geom_point() + theme_bw() + labs(title="prediction on test set (rf)", x="observed quality", y ="predicted quality") + xlim(3, 8) + ylim(3, 8)
+grid.arrange(plot.train.rf, plot.test.rf, nrow=1)
+```
+
+
+

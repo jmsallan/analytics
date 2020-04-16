@@ -1,0 +1,181 @@
+---
+title: "Regularization in linear regression"
+author: "Jose M Sallan"
+date: "10/04/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Insurance data
+
+To illustrate the concepts of this document, we will use the same data of the introduction to regression analysis.
+
+## The dataset
+
+`InsuranceCharges` contains several features of individuals such as age, physical/family condition and location, and their existing medical expense. We intend to predict future medical expenses of individuals that help medical insurance to make decision on charging the premium.
+
+The source of data is this Kaggle competition:
+
+https://www.kaggle.com/noordeen/insurance-premium-prediction
+
+The data are embedded in the `BAdatasets` package. We'll load also `tidyverse` for data wrangling and plotting and `caret` for machine learning.
+
+```{r, message=FALSE}
+library(tidyverse)
+library(BAdatasets)
+library(caret)
+```
+
+We rename the dataset as `insurance` and introduce the categorical variable `bmi30` characterizing obesity.
+
+```{r}
+insurance <- InsuranceCharges
+insurance <- insurance %>% mutate(bmi30 = as.factor(ifelse(insurance$bmi >= 30, 1, 0)))
+```
+
+## The linear regression model
+
+Let's split data into train and test...
+
+```{r}
+set.seed(1111)
+inTrain <- createDataPartition(insurance$charges, p=0.8, list=FALSE)
+insurance_train <- insurance[inTrain, ]
+insurance_test <- insurance[-inTrain, ]
+```
+
+...and define a regression model as an starting point:
+
+```{r}
+mod05 <- train(charges ~ poly(age, 2) + children + smoker  + region + bmi30*smoker, method="lm", insurance_train, preProcess=c("center", "scale"))
+pr_train05 <- predict(mod05, insurance_train)
+postResample(pred = pr_train05, insurance_train$charges)
+```
+
+The prediction on the test set does not show overfitting:
+
+```{r}
+pr_test05 <- predict(mod05, insurance_test)
+postResample(pred = pr_test05, insurance_test$charges)
+```
+
+In datasets with many features, it can happen that using all of them leads to a worse performance than using only a subset. Selecting the features to introduce for better accuracy is the **feature selection** problem. There are two *classical* techniques of feature selection:
+
+* **Best subsets**, which examines the fit of all possible subsets of features to choose the best subset. This can be computationally expensive, and sometimes we use algorithms like simulated annealing to choose that subset.
+* **Stepwise regression**, consisting in adding or removing a feature in each step, until a satisfactory model is found.
+
+An alternative to these strategies is **regularization**, in which we limit the total value of regression coefficients.
+
+# Regularization in linear regression
+
+The regression coefficients in the ordinary least squares (OLS) approach to linear regression are the ones that minimize the sum of squared errors:
+
+\[ \displaystyle\sum_{i=1}^n \left( y_i - \hat{y}_i \right)^2 \]
+
+Let's examine two regularization approaches to OLS, lasso and ridge regression.
+
+## L1 regularization: lasso regression
+
+The name **lasso** stands for **least absolute shrinkage and selection operator**.
+
+Lasso was introduced in order to improve the prediction accuracy and interpretability of regression models by altering the model fitting process. We select only a subset of the provided covariates for use in the final model, rather than using all of them.
+
+The approach of lasso is to force regression coefficients to shrink, forcing that the sum of absolute values or 1-norm to be smaller than a value $t$:
+
+\[ \displaystyle\sum_{j=1}^p |\beta_j| = \lVert \beta \lVert_1 \leq t\]
+
+This is equivalent to minimizing:
+
+\[ \displaystyle\sum_{i=1}^n \left( y_i - \hat{y}_i \right)^2 + \lambda \lVert \beta \lVert_1 \]
+
+where $\lambda$ is a parameter to be estimated from data.
+
+This approach may force some regression coefficients  to be set to zero, effectively choosing a simpler model that does not include those coefficients. As it uses the 1-norm of regression coefficients, lasso is also called **L1 regularization**.
+
+## L2 regularization: ridge regression
+
+Ridge regression uses a strategy analogous to lasso regression, but bounding the 2-norm of the vector of regression coefficients to a value $t$:
+
+\[ \displaystyle\sum_{j=1}^p \beta_j^2 = \lVert \beta \lVert_2 \leq t \]
+
+This is equivalent to minimizing:
+
+\[ \displaystyle\sum_{i=1}^n \left( y_i - \hat{y}_i \right)^2 + \lambda \lVert \beta \lVert_2 \]
+
+The parameter $\lambda$ has to be estimated from data. As ridge regression uses the 2-norm, we call it **L2 regularization**.
+
+Although the formula of ridge regression is quite similar to lasso, ridge regression improves prediction error by shrinking large regression coefficients in order to reduce overfitting, instead of setting some coefficients to zero.
+
+## R implementation
+
+Lasso and ridge regularizations are implemented in R through the `glmnet` package. This package allows performing L1 and L2 regularization, obtaining coefficients by minimizing:
+
+\[ \displaystyle\sum_{i=1}^n \left( y_i - \hat{y}_i \right)^2 + \lambda \left( \alpha \lVert \beta \lVert_1 + \left( 1- \alpha \right)\lVert \beta \lVert_2 \right) \]
+
+Here we have two parameters to optimize:
+
+* $\alpha$ indicates what kind of regularization are using: with $\alpha=1$ is L1 regularization, and $\alpha=0$ L2 regularization. We can also choose $0 < \alpha ≤ 1$ for a compromise between both regularizations.
+* $\lambda$ is related to the value of bounding of 1-norm or 2-norm of regression coefficients.
+
+You can get more information about `glmnet` on:
+
+https://web.stanford.edu/~hastie/Papers/Glmnet_Vignette.pdf 
+
+To use adequately regularization, it is important to **standardize (center and scale)** feature values.
+
+# Lasso and ridge regression with `glmnet`
+
+We will use `caret` to look for the best combination of parameter values for regularization. We define the following tuning grid:
+
+```{r}
+L1L2grid <- expand.grid(alpha=c(0, 0.5, 1), lambda=c(0, 1, 5, 10, 20, 30))
+```
+
+Here we are tring L1 and L2 regularization, and a compromise between both. The values of $\lambda$ have been set from a initial exploration of the model.
+
+Let's train the model with regularization:
+
+```{r}
+mod06 <- train(charges ~ age + I(age^2) + sex + children + region + bmi30*smoker, insurance_train, method="glmnet", trControl=trainControl(method='repeatedcv', number=5, repeats=3), preProcess=c("center", "scale"), tuneGrid=L1L2grid)
+```
+
+Let's see the results:
+
+```{r}
+mod06
+plot(mod06)
+```
+
+We can see that the best performance is obtained with L1 regularization, and that $\lambda$ is not so important to obtain accuracy here.
+
+Let's obtain the predictions of this model for the train and test sets.
+
+```{r}
+pr_train06 <- predict(mod06, insurance_train)
+pr_test06 <- predict(mod06, insurance_test)
+
+postResample(pred = pr_train06, insurance_train$charges)
+```
+
+We can compare the performance of original model and regularization on the train set:
+
+```{r}
+postResample(pred = pr_train05, insurance_train$charges)
+postResample(pred = pr_train06, insurance_train$charges)
+```
+
+and in the test set:
+
+```{r}
+postResample(pred = pr_test05, insurance_test$charges)
+postResample(pred = pr_test06, insurance_test$charges)
+```
+
+The effect of regularization is quite insignificant here. Note that the number of predictors of this model is small, and that all of them are significant when predicting the outcome.
