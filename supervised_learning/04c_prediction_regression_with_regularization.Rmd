@@ -97,13 +97,13 @@ This is equivalent to minimizing:
 
 where $\lambda$ is a parameter to be estimated from data.
 
-This approach may force some regression coefficients  to be set to zero, effectively choosing a simpler model that does not include those coefficients. As it uses the 1-norm of regression coefficients, lasso is also called **L1 regularization**.
+This approach may force some regression coefficients to be set to zero, choosing a simpler model that does not include those coefficients. As it uses the 1-norm of regression coefficients, lasso is also called **L1 regularization**.
 
 ## L2 regularization: ridge regression
 
 Ridge regression uses a strategy analogous to lasso regression, but bounding the 2-norm of the vector of regression coefficients to a value $t$:
 
-\[ \displaystyle\sum_{j=1}^p \beta_j^2 = \lVert \beta \lVert_2 \leq t \]
+\[ \sqrt{\displaystyle\sum_{j=1}^p \beta_j^2} = \lVert \beta \lVert_2 \leq t \]
 
 This is equivalent to minimizing:
 
@@ -111,7 +111,7 @@ This is equivalent to minimizing:
 
 The parameter $\lambda$ has to be estimated from data. As ridge regression uses the 2-norm, we call it **L2 regularization**.
 
-Although the formula of ridge regression is quite similar to lasso, ridge regression improves prediction error by shrinking large regression coefficients in order to reduce overfitting, instead of setting some coefficients to zero.
+Although the formula of ridge regression is quite similar to lasso, ridge regression improves prediction error by shrinking large regression coefficients in order to reduce overfitting.
 
 ## R implementation
 
@@ -153,9 +153,9 @@ mod06
 plot(mod06)
 ```
 
-We can see that the best performance is obtained with L1 regularization, and that $\lambda$ is not so important to obtain accuracy here.
+We can see that the best performance is obtained with L1 regularization, and that $\lambda$ is not so important to obtain accuracy in this model.
 
-Let's obtain the predictions of this model for the train and test sets.
+Let's obtain the predictions for the train and test sets for this model.
 
 ```{r}
 pr_train06 <- predict(mod06, insurance_train)
@@ -164,7 +164,7 @@ pr_test06 <- predict(mod06, insurance_test)
 postResample(pred = pr_train06, insurance_train$charges)
 ```
 
-We can compare the performance of original model and regularization on the train set:
+We can compare the performance of original and regularized models on the train set:
 
 ```{r}
 postResample(pred = pr_train05, insurance_train$charges)

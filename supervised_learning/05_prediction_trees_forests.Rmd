@@ -39,7 +39,6 @@ ggplot(red, aes(quality)) + geom_bar()
 Let's split the dataset into test and train sets:
 
 ```{r, message=FALSE}
-library(caret)
 set.seed(2020)
 inTrain <- createDataPartition(red$quality, p=0.8, list = FALSE)
 red_train <- data.frame(red[inTrain, ])
@@ -51,7 +50,7 @@ We will try to predict the value of `quality` using trees for numerical predicti
 
 # Predicting with trees
 
-We have seen that decision trees can be a powerful strategy for classification tasks. We can apply a similar strategy for prediction: we divide data into smaller and smaller groups, so that in each group (most of) the observations have similar values of the predicted variable. Then, we assign to the elements of each subset the average value of the variable. The output of these techniques is a logical, tree-like structure of classification, that can be interpreted without statistical knowledge. 
+We have seen that decision trees can be a powerful strategy for classification tasks. We can apply a similar strategy for prediction: we divide data into smaller and smaller subsets, so that in each subsets (most of) the observations have similar values of the predicted variable. Then, we assign to the elements of each subset the average value of the variable. The output of these techniques is a logical, tree-like structure of classification, that can be interpreted without statistical knowledge. 
 
 To apply trees to prediction, we need an homogeneity metric of the elements of a subset. While in classification we use entropy, in prediction we use the **standard deviation** of the predicted variable.
 
@@ -75,11 +74,11 @@ Like in classification, we can foster the performance of regression trees using 
     2. Train a decision tree with the selected variables.
 3. Assign a value of the predicted variable to each member of the dataset averaging the predictions for each tree.
 
-To implement random forests in prediction, we can use the `rf` package. The package implements classification or prediction depending of the type of the target variable: it applies classification if the target is a factor, and prediction if it is a numeric.
+To implement random forests in prediction, we can use the `rf` package. The package applies classification if the target is a factor, and prediction if it is a numeric.
 
 # Regression trees in `WineQuality`
 
-Let's apply regression trees to the red dataset. First we will use the `rpart` package, and then we will tune the regression tree with `caret`. 
+Let's apply regression trees to the `red` dataset. First we will use the `rpart` package, and then we will tune the regression tree with `caret`. 
 
 ## Using `rpart`
 
@@ -90,7 +89,7 @@ library(rpart)
 library(rpart.plot)
 ```
 
-Let's train a regression tree with the `rpart` function using all features:
+Let's train a regression tree with the `rpart` function using all features and the default settings:
 
 ```{r}
 red_rpart01 <- rpart(quality ~ ., red_train)
@@ -113,14 +112,14 @@ postResample(red_rpart01_pr, red_train$quality)
 
 ## Tuning the regression tree
 
-We can tune rpart with a complexity parameter `cp`, that regulates pruning (too technical to be discussed here). We use cross validation to tune the model with a grid of several values of `cp`.
+We can tune `rpart` with a complexity parameter `cp`, that regulates pruning (too technical to be discussed here). We use cross validation to tune the model with a grid of several values of `cp`.
 
 ```{r}
 set.seed(2020)
 red_rpart02 <- train(quality ~ ., red_train, method="rpart", trControl=trainControl(method='repeatedcv', number=3, repeats=3), tuneGrid=expand.grid(cp=seq(0.001, 0.02, by=0.001)))
 ```
 
-The results of the tuning are tht the best prediction is achieved with `cp=0.01`.
+The results of the tuning are that the best prediction is achieved with `cp=0.01`.
 
 ```{r}
 plot(red_rpart02)
@@ -148,7 +147,7 @@ red_rpart02_prtest <- predict(red_rpart02, red_test)
 postResample(red_rpart02_prtest, red_test$quality)
 ```
 
-The results for the test set are much worse than for the train set, meaning that the model is overfitted to the train set. To illustrate this, let's see how has been the prediction in the train test:
+The results for the test set are much worse than for the train set, meaning that the model is overfitted to the train set. To illustrate this, let's see how has been the prediction in train and test sets:
 
 ```{r,, message=FALSE}
 library(gridExtra)
