@@ -1,0 +1,204 @@
+---
+title: "Classifying with logistic regression"
+author: "Jose M Sallan"
+date: "28/03/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE}
+library(tidyverse)
+library(caret)
+```
+
+
+# A classification problem
+
+Let's introduce a classification problem on `mtcars`. This dataset contains data from the 1974 *Motor Trend* US magazine, and comprises fuel consumption and 10 aspects of automobile design and performance for 32 automobiles (1973–74 models).
+
+Usually we use that dataset to predict fuel consumption `mpg`, but now we will use it for a classification problem: telling from available data if a car is offered by an American manufacturer or not. We know the names of the models, so we can define a factor variable indicating if the car is `american` or not.
+
+```{r}
+american <- c(0, 0 ,0 ,1 , 1 , 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0)
+names(american) <- row.names(mtcars)
+american
+```
+
+Let's add this variable to `mtcars` as a factor. This will be our target variable in the classification problem.
+
+```{r}
+mtcars <- mtcars  %>% mutate(american = as.factor(american))
+```
+
+# Logistic regression
+
+## Introducing logistic regression
+
+The original linear regression model takes an unbounded dependent variable, meaning that it can take any positive or negative value. In **logistic regression**, the response variable takes values zero and one, and the model predicts the probability of an observation taking the value 1 as a function of independent variables. We call this probability the **classification probability**.
+
+We cannot use a model of ordinary least squares to estimate a linear regression model, as a predicted variable $\hat{y}_i$ can take values outside the (0, 1) interval. So instead of ordinary least squares regression, we use logistic regression. In logistic regression we obtain the classification probability $p_i$ of observation $i$ from its estimated value $\hat{y}_i$ with the **logit function**:
+
+\[  ln\frac{p_i}{1-p_i} = \beta_0 + \beta_1x_{1i} + \beta_2x_{2i} + \dots + \beta_px_{pi} + \varepsilon_i \]
+
+The logistic function takes the estimation $\hat{y}_i$ from the linear model, and turns it into a probability:
+
+```{r, echo=FALSE}
+p <- seq(0, 1, 0.01)
+p <- p[2:(length(p)-1)]
+y <- log(p/(1-p))
+
+data.frame(y=y, p=p) %>% ggplot(aes(y,p)) + geom_line() + theme_bw() + labs(title = "Logistic function")
+```
+
+We can estimate a logistic regression model in R usimg the `glm` function for generalized linear models with the parameter `family='binomial'`.
+
+## A logistic regression model
+
+Let's see if we can tell if an observation of `mtcars` is an American car. To do so, we will build a logistic regression model with number of cylinders `cyl` and number of forward gears `gear`.
+
+```{r}
+lr <- glm(american  ~ cyl + gear, data=mtcars, family = "binomial")
+summary(lr)
+```
+
+It looks like American cars tended to have more cylinders and less forward gears than non-American.
+
+## Classification probabilities
+
+We can retrieve from `lr` the classification probabilities using `predict` with the `type="response"`. These are the probabilities of each observation being an American car, the value 1 in the dependent variable.
+
+```{r}
+prob_american <- predict(lr, mtcars, type="response")
+```
+
+Let's see the distribution of probabilities for American and non-American cars:
+
+```{r}
+data.frame(name=row.names(mtcars), real=as.factor(american), prob=prob_american) %>% 
+  ggplot(aes(real, prob)) + 
+  geom_boxplot() +
+  theme_bw() +
+  labs(x="real value", y="probability of classification")
+```
+
+Although there are outliers in both categories of data, in most cases the model assigns a high classification probability to American cars, and a low classification probability to non-American.
+
+## Prediction and confusion matrix
+
+To assign a category to each observation we apply a **threshold value** to the classification probabilities. Observations with a probability above the threshold will be assigned to the class corresponding to the value 1 in the dependent variable. The other observations will be assigned probability zero.
+
+The usual choice is selecting a threshold probability of 0.5:
+
+```{r}
+pred_american <- as.factor(ifelse(prob_american > 0.5, 1, 0))
+```
+
+We can obtain the `confusionMatrix` for this classification with the `caret` function:
+
+```{r}
+confusionMatrix(pred_american, mtcars$american)
+```
+
+# Receiver operating characteristic (ROC) curve
+
+The receiver operating characteristic curve was first developed by electrical engineers and radar engineers during World War II for detecting enemy objects in battlefields. Later, it has been used in many contexts where we need to assess the performance of a classifyer.
+
+## Definition of ROC
+
+A **receiver operating characteristic curve**, or **ROC curve**, is a plot that illustrates the diagnostic ability of a binary classifier system as its discrimination threshold is varied.
+
+The inputs of the ROC curve are the classification probabilities and the values of the target variable for a dataset. The ROC curve is created by plotting the true positive rate (TPR) against the false positive rate (FPR) at various threshold settings. Each point of the curve corresponds to a different threshold.
+
+Let's review what these FPR and TPR concepts are:
+
+* The **false-positive rate FPR** is the rate between false positives to real negatives. It is also known as probability of false alarm, or Type-I error rate. It can be calculated as 1 - specificity.
+* The **true-positive rate TPR** is the rate of true positives to real positives. It is also known as sensitivity, recall or probability of detection. 
+
+Every ROC curve have two fixed points:
+
+* For a threshold of zero all elements will be classified as positives. This means that `FPR=1` (all negatives have been classified incorrectly) and `TPR=1` (all positives have been correctly classified).
+* For a threshold of one all elements will be classified as negatives. This means that `FPR=0` (all negatives have been classified correctly) and `TPR=0` (all positives have been  classified incorrectly).
+
+An ideal, perfect classifyer would have `FPR=0` and `TPR=1` for all other thresholds. Its ROC curve would look like this:
+
+```{r, echo=FALSE}
+data.frame(FPR=c(0,0,1), TPR=c(0,1,1)) %>% ggplot(aes(FPR, TPR)) + geom_path() +  theme_bw()
+```
+
+## Obtaining a ROC curve for the logistic regression
+
+In the previous section we have calculated `pred_american` from `prob_american` with a threshold value of 0.5. From the `caret` confusion matrix, we know that at this threshold value our classifyer has a true-positive rate of `r confusionMatrix(as.factor(pred_american), mtcars$american)$byClass[1]` and a false-positive rate of `r 1-confusionMatrix(as.factor(pred_american), mtcars$american)$byClass[2]`.
+
+Let's calculate FPR and TPR for several threshold values for this classifyier:
+
+```{r}
+fpr_tpr <- function(real, prob, threshold){
+  pred <- ifelse(prob > threshold, 1, 0)
+  positives <- sum(real==1)
+  negatives <- sum(real==0)
+  true_positives <- sum(real==1 & pred==1)
+  false_positives <- sum(real==0 & pred==1)
+  fpr <- false_positives/negatives
+  tpr <- true_positives/positives
+  return(list(FPR=fpr, TPR=tpr))
+}
+
+table <- lapply(seq(0, 1, 0.1), function(x) fpr_tpr(american, prob_american, x))
+roc <- data.frame(threshold=seq(0, 1, 0.1), FPR=sapply(table, function(x) x$FPR), TPR=sapply(table, function(x) x$TPR))
+```
+
+Let's see the results:
+
+```{r}
+print(roc, digits = 3)
+```
+
+In this case, threshold values from 0.4 to 0.8 produce the same point, similarly to thresholds 0.9 and 1.0. Let's see how the curve of our classifyer looks like:
+
+```{r}
+ggplot(roc, aes(FPR, TPR)) +
+  geom_path() + 
+  theme_bw()
+```
+
+Looks like it is a good classifyer, as it is close to the perfect classifyer of the above curve. If we want to collapse into into number the information of the ROC, we can define the AUC (area under curve) as the area defined here:
+
+```{r}
+ggplot(roc %>% add_row(threshold=-1, FPR=1, TPR=0), aes(FPR, TPR, fill=factor(1))) + 
+  geom_polygon(show.legend = FALSE) + 
+  scale_fill_manual(values = "#3399FF") + 
+  theme_bw()
+```
+
+We can obtain the value of the AUC using the `ROCR` package:
+
+```{r, message=FALSE}
+library(ROCR)
+pred_ROCR <- ROCR::prediction(prob_american, mtcars$american)
+performance(pred_ROCR, measure = "auc")@y.values[[1]]
+```
+
+A perfect classifyer has a AUC value equal to one. The worse classifyier possible has an AUC of 0.5. If we found a classifyer with an AUC of less than 0.5, we can obtain a better classifyer just reversing the prediction. 
+
+## ROC as classification metric
+
+ROC is widely appreciated as a performance metric for classification algorithms, as it allows to find a balance between sensitivity and specificity. To make `caret` select a model according to ROC, you need to:
+
+* Use `summaryFunction=twoClassSummary` and `classProbs=TRUE` in trainControl.
+* Use `metric="ROC"` in `train`.
+
+Then, it will use the AUC value to select a model.
+
+## Classification probabilities in decision trees and forests
+
+We can define ROC and AUC for other classifyers like decision trees and random forests, if we are able to define a probability of classification to each observation, although it is not as natural as with logistc regression:
+
+* For decision trees, the classification probability of an observation is the fraction of elements with target value equal to one in the leave (final subset) the observation belongs to. This definition makes sense if the tree is pruned, otherwise we can end with a single observation in each leave and all probabilities are equal to zero or one. Classification probabilities are quite unstable in decision trees (see https://rpmcruz.github.io/machine%20learning/2018/02/09/probabilities-trees.html).
+* For random forests, the classification probability can be calculated as the proportion of decision trees that have assigned class one to the observation. These classification probabilities are more stable than for decision trees.
