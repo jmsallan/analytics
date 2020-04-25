@@ -1,0 +1,144 @@
+---
+title: "Training many models on `Sonar`"
+author: "Jose M Sallan"
+date: "17/04/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE}
+library(tidyverse)
+library(caret)
+```
+
+
+# The `Sonar` dataset
+
+The dataset we will analyse is `Sonar`, available from the `mlbench` package. The task is to train a network to discriminate between sonar signals bounced off a metal cylinder (a mine) and those bounced off a roughly cylindrical rock. Mines are labelled as `M` and rocks as `R` in the `Class` target variable. Each of the 208 elements is a set of 60 variables `V1` to `V60` in the range 0.0 to 1.0. Each number represents the energy within a particular frequency band, integrated over a certain period of time.
+
+```{r}
+library(mlbench)
+data("Sonar")
+```
+
+Let's split data into train and test sets:
+
+```{r}
+set.seed(2020)
+inTrain <- createDataPartition(Sonar$Class, p=0.8, list = FALSE)
+Sonar_train <- Sonar[inTrain, ]
+Sonar_test <- Sonar[-inTrain, ]
+```
+
+# Classifying `Sonar`
+
+Here we will apply several models to try to find a good classifyer for `Sonar`. We will tune models using AUC as performance metric, so we need a control function including `summaryFunction = twoClassSummary` and `classProbs = TRUE`:
+
+```{r}
+tr_control <- trainControl(method='repeatedcv', 
+                         number=5, 
+                         repeats=3,
+                         summaryFunction = twoClassSummary,
+                         classProbs = TRUE)
+```
+
+## Random forests
+
+The first model we are tuning is a random forests classifyer:
+
+```{r}
+rf <- train(Class ~ ., Sonar_train, method="rf", trControl=tr_control, tuneGrid=expand.grid(mtry=2:10), metric="ROC")
+```
+
+## Logistic regression
+
+As an alternative, let's tune a logistic regression model with the `glm` method and `family="binomial"`.
+
+```{r}
+lr <- train(Class ~ ., Sonar_train, method="glm", family="binomial", trControl=tr_control, control = list(maxit = 50), metric="ROC")
+```
+
+## Regularized logistic regression
+
+The `glm` function has returned several warnings, which may be an indication that we have correlated predictors. A possible strategy for tackling this problem is to apply regularization to logistic regression. See **Regularization in linear regression** for an introduction to L1 and L2 regularization in the context of linear regression.
+
+We can use the `glmnet` package for regularized logistic regression. The dependent variable must be recorded as factor. For this model, the range of values of `lambda` to explore have been obtained from trial and error.
+
+```{r}
+rlr <- train(Class ~ ., Sonar_train, method="glmnet", trControl=tr_control, preProcess=c("center", "scale"), tuneGrid=expand.grid(alpha=c(0, 0.5, 1), lambda=seq(0, 1, 0.1)), metric="ROC")
+```
+
+## Partial least squares
+
+An alternative to regularization is to use dimension reduction techniques on the feature set. This can be specially adequate in this dataset, that has sixty different predictors. A well-know statistical dimension reduction technique is **principal components analysis**. This technique summarizes a significant fraction of the variability of features in a small set of uncorrelated **factors**. These factors are unobservable variables, defined as a linear combination of the original features.
+
+In the context of linear regression, we can use **partial least squares**. This technique defines principal components that not only summarize the original features, but also that are related to the outcome. These components are then used to fit the regression model. Partial squares can be used to predict a numerical value or as a classifyer. In this case, the factors are the indepedent variables of a logistic regression model.
+
+To apply partial least squares, we use `method="pls"`, and tune the algorithm from a range of `ncomp` components.
+
+
+```{r}
+pls <- train(Class ~ ., Sonar_train, method="pls", trControl=tr_control, tuneGrid=expand.grid(ncomp=2:20), metric="ROC")
+```
+
+## Boosted Logistic Regression
+
+Finally, we can explore **boosting** or weighting the observations that are not well predicted by the model in an iterative process. For a short introduction to boosting, see **Decision trees winnowing and boosting**. We will use the `LogitBoost` method, tuning it with the number of iterations `nIter`.
+
+```{r}
+logitboost <- train(Class ~ ., Sonar_train, method="LogitBoost", trControl=tr_control, tuneGrid=expand.grid(nIter=c(5,10, 15)), metric="ROC")
+```
+
+# Assessing the performance of models
+
+We can evaluate the performance of each model individually, or assessing all the models together using `resamples`. That function obtains a set of performance measures for each model, resampling from the training set.
+
+```{r}
+resamps <- resamples(list(RF = rf,
+                          LR = lr,
+                          RLR = rlr,
+                          PLS = pls,
+                          LB=logitboost))
+```
+
+If we examine `resamps`, we see that we are obtaining the performance metrics for all models:
+
+```{r}
+summary(resamps)
+```
+
+We can understand results better if we present performance metrics graphically:
+
+```{r, message=FALSE}
+library(gridExtra)
+plotROC <- ggplot(resamps, models=resamps$models, metric="ROC") + ylim(0.6, 1) + labs(title = "AUC")
+plotSens <- ggplot(resamps, models=resamps$models, metric="Sens") + ylim(0.6, 1) + labs(title = "Sens")
+plotSpec <- ggplot(resamps, models=resamps$models, metric="Spec") + ylim(0.6, 1) + labs(title = "Spec")
+grid.arrange(plotROC, plotSens, plotSpec, nrow=1)
+```
+
+We see that the best classifyer is random forests `RF`, followed by regularized regresion `RLR`, boosting `LB` and partial least squares `PLS`. The worst classifyer of the set is the straight logistic regression `LR`.
+
+Let's examine the performance of random forests on the test set:
+
+```{r}
+rf_predict_test <- predict(rf, Sonar_test)
+confusionMatrix(rf_predict_test, Sonar_test$Class)
+```
+
+The value of sensibility is compatible with the obtained in the train set, although specificity is much lower. This can be because the random forests model is overfitted to the train set, in spite of the application of cross validation. Another possible explanation is that the test set is too small and then too sensitive to a bad classification of a small subset of observations.
+
+The results of the partial least squares have a more balanced performance on the test set, although accuracy and sensitivity are slightly smaller. A smaller sensitivity means that the classifyer is less able to detect mines, an issue to consider in the context of this job.
+
+```{r}
+pls_predict_test <- predict(pls, Sonar_test)
+confusionMatrix(pls_predict_test, Sonar_test$Class)
+```
+
