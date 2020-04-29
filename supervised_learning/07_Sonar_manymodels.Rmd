@@ -69,7 +69,7 @@ lr <- train(Class ~ ., Sonar_train, method="glm", family="binomial", trControl=t
 
 The `glm` function has returned several warnings, which may be an indication that we have correlated predictors. A possible strategy for tackling this problem is to apply regularization to logistic regression. See **Regularization in linear regression** for an introduction to L1 and L2 regularization in the context of linear regression.
 
-We can use the `glmnet` package for regularized logistic regression. The dependent variable must be recorded as factor. For this model, the range of values of `lambda` to explore have been obtained from trial and error.
+We can use the `glmnet` package for regularized logistic regression. The dependent variable must be recorded as factor. For this model, the range of values of `lambda` to explore have been obtained from trial and error. Note that we include `lambda=0` in the tuning grid, so that we are testing logistic regression without regularization against regularized models.
 
 ```{r}
 rlr <- train(Class ~ ., Sonar_train, method="glmnet", trControl=tr_control, preProcess=c("center", "scale"), tuneGrid=expand.grid(alpha=c(0, 0.5, 1), lambda=seq(0, 1, 0.1)), metric="ROC")
@@ -90,7 +90,7 @@ pls <- train(Class ~ ., Sonar_train, method="pls", trControl=tr_control, tuneGri
 
 ## Boosted Logistic Regression
 
-Finally, we can explore **boosting** or weighting the observations that are not well predicted by the model in an iterative process. For a short introduction to boosting, see **Decision trees winnowing and boosting**. We will use the `LogitBoost` method, tuning it with the number of iterations `nIter`.
+Finally, we can explore **boosting** or weighting the observations that are not well predicted by the model in an iterative process. For a short introduction to boosting, see **Decision trees winnowing and boosting**. We will use the `LogitBoost` method, tuning it with the number of iterations `nIter` in the boosting process.
 
 ```{r}
 logitboost <- train(Class ~ ., Sonar_train, method="LogitBoost", trControl=tr_control, tuneGrid=expand.grid(nIter=c(5,10, 15)), metric="ROC")
@@ -120,11 +120,11 @@ We can understand results better if we present performance metrics graphically:
 library(gridExtra)
 plotROC <- ggplot(resamps, models=resamps$models, metric="ROC") + ylim(0.6, 1) + labs(title = "AUC")
 plotSens <- ggplot(resamps, models=resamps$models, metric="Sens") + ylim(0.6, 1) + labs(title = "Sens")
-plotSpec <- ggplot(resamps, models=resamps$models, metric="Spec") + ylim(0.6, 1) + labs(title = "Spec")
+plotSpec <- ggplot(resamps, models=resamps$models, metric="Spec") + ylim(0.5, 1) + labs(title = "Spec")
 grid.arrange(plotROC, plotSens, plotSpec, nrow=1)
 ```
 
-We see that the best classifyer is random forests `RF`, followed by regularized regresion `RLR`, boosting `LB` and partial least squares `PLS`. The worst classifyer of the set is the straight logistic regression `LR`.
+We see that the best classifyer is random forests `RF`, followed by regularized logistic regresion `RLR`, boosting `LB` and partial least squares `PLS`. The worst classifyer of the set is the straight logistic regression `LR`.
 
 Let's examine the performance of random forests on the test set:
 

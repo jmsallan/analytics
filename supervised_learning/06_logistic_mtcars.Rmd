@@ -45,7 +45,7 @@ The original linear regression model takes an unbounded dependent variable, mean
 
 We cannot use a model of ordinary least squares to estimate a linear regression model, as a predicted variable $\hat{y}_i$ can take values outside the (0, 1) interval. So instead of ordinary least squares regression, we use logistic regression. In logistic regression we obtain the classification probability $p_i$ of observation $i$ from its estimated value $\hat{y}_i$ with the **logit function**:
 
-\[  ln\frac{p_i}{1-p_i} = \beta_0 + \beta_1x_{1i} + \beta_2x_{2i} + \dots + \beta_px_{pi} + \varepsilon_i \]
+\[  log\frac{p_i}{1-p_i} = \beta_0 + \beta_1x_{1i} + \beta_2x_{2i} + \dots + \beta_px_{pi} + \varepsilon_i \]
 
 The logistic function takes the estimation $\hat{y}_i$ from the linear model, and turns it into a probability:
 
@@ -100,10 +100,10 @@ The usual choice is selecting a threshold probability of 0.5:
 pred_american <- as.factor(ifelse(prob_american > 0.5, 1, 0))
 ```
 
-We can obtain the `confusionMatrix` for this classification with the `caret` function:
+We can obtain the `confusionMatrix` for this classification with the `caret` function. We set `positive="1"` to compute sensitivity and specificity correctly.
 
 ```{r}
-confusionMatrix(pred_american, mtcars$american)
+confusionMatrix(pred_american, mtcars$american, positive="1")
 ```
 
 # Receiver operating characteristic (ROC) curve
@@ -118,8 +118,8 @@ The inputs of the ROC curve are the classification probabilities and the values 
 
 Let's review what these FPR and TPR concepts are:
 
-* The **false-positive rate FPR** is the rate between false positives to real negatives. It is also known as probability of false alarm, or Type-I error rate. It can be calculated as 1 - specificity.
-* The **true-positive rate TPR** is the rate of true positives to real positives. It is also known as sensitivity, recall or probability of detection. 
+* The **false-positive rate FPR** is the rate between false positives to real negatives. It is also known as probability of false alarm, or Type-I error rate. It can be calculated as **1 - specificity**.
+* The **true-positive rate TPR** is the rate of true positives to real positives. It is also known as **sensitivity**, recall or probability of detection. 
 
 Every ROC curve have two fixed points:
 
@@ -129,7 +129,15 @@ Every ROC curve have two fixed points:
 An ideal, perfect classifyer would have `FPR=0` and `TPR=1` for all other thresholds. Its ROC curve would look like this:
 
 ```{r, echo=FALSE}
-data.frame(FPR=c(0,0,1), TPR=c(0,1,1)) %>% ggplot(aes(FPR, TPR)) + geom_path() +  theme_bw()
+data.frame(FPR=c(0,0,1), TPR=c(0,1,1)) %>% ggplot(aes(FPR, TPR)) +
+  annotate(geom="text", x=0.1, y=0.1, col="#A0A0A0", label="threshold=1", hjust="left") +
+  annotate(geom="curve", x=0.1, y=0.1, col="#A0A0A0", curvature=0.3, xend=0, yend=0, arrow = arrow(length = unit(2, "mm"))) +
+  annotate(geom="text", x=0.9, y=0.9, col="#A0A0A0", label="threshold=0", hjust="right") +
+  annotate(geom="curve", x=0.9, y=0.9, col="#A0A0A0", xend=1, yend=1, curvature=0.3, arrow = arrow(length = unit(2, "mm"))) +
+  annotate(geom="text", x=0.1, y=0.9, col="#A0A0A0", label="perfect classifyer", hjust="left") +
+  annotate(geom="curve", x=0.1, y=0.9, col="#A0A0A0", xend=0, yend=1, curvature=-0.3, arrow = arrow(length = unit(2, "mm"))) +
+  geom_path() +
+  theme_bw()
 ```
 
 ## Obtaining a ROC curve for the logistic regression
@@ -164,6 +172,7 @@ In this case, threshold values from 0.4 to 0.8 produce the same point, similarly
 
 ```{r}
 ggplot(roc, aes(FPR, TPR)) +
+  geom_point() +
   geom_path() + 
   theme_bw()
 ```
@@ -189,7 +198,7 @@ A perfect classifyer has a AUC value equal to one. The worse classifyier possibl
 
 ## ROC as classification metric
 
-ROC is widely appreciated as a performance metric for classification algorithms, as it allows to find a balance between sensitivity and specificity. To make `caret` select a model according to ROC, you need to:
+ROC is widely appreciated as a performance metric for classification algorithms, as it allows to find a balance between sensitivity and specificity. Models with a AUC close to one are presumed to have high values of sensitivity and specificity. To make `caret` select a model according to ROC, you need to:
 
 * Use `summaryFunction=twoClassSummary` and `classProbs=TRUE` in trainControl.
 * Use `metric="ROC"` in `train`.
