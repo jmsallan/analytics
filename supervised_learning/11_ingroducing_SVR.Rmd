@@ -1,0 +1,94 @@
+---
+title: "Support vector regression"
+author: "Jose M Sallan"
+date: "05/05/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE}
+library(tidyverse)
+library(caret)
+library(e1071)
+```
+
+
+# Support vector regression
+
+Support vector machines (SVM) were developed as a technique for classification. But as with most classification techniques, they can be also used for numerical prediction. In this context, we usually speak of **support vector regresssion (SVR)**.
+
+The goal of SVR is to find a function $f\left( \mathbf{x} \right)$ that deviates at most $\varepsilon$ from the observed target variable $y$. At the same time, we want this function to be as flat as possible, that is, with the smallest regression coefficients. Flat regression models are simpler than models with bigger coefficients, and hopefully less prone to overfitting.
+
+For a linear function $f\left( \mathbf{x} \right) = \mathbf{w}'\mathbf{x} + b$, the approach of SVR can be written as the following optimization problem:
+
+\begin{align}
+\text{MIN} & \lvert \lvert \mathbf{w} \lvert \lvert_2^2 \\
+\text{s. t. } & y_i - \mathbf{w}' \mathbf{x}_i - b \leq \varepsilon \\
+ & y_i - \mathbf{w}' \mathbf{x}_i - b \geq \varepsilon
+\end{align}
+
+This **hard margin** formulation is analogous to the one of SVM for classification. 
+
+In generic datasets, some points can have a target variable further than $\lvert \varepsilon \lvert$. To account for this, we can define slack and excess variables:
+
+\begin{align}
+e_i &= \text{MAX } \left( 0, \varepsilon - \left( y_i - \mathbf{w}' \mathbf{x}_i - b \right) \right) & h_i &= \text{MAX } \left(0,  y_i - \mathbf{w}' \mathbf{x}_i - b - \varepsilon \right)
+\end{align}
+
+Then, the **soft margin** optimization problem becomes:
+
+\begin{align}
+\text{MIN} & \lvert \lvert \mathbf{w} \lvert \lvert_2^2 + C\sum_{i=1}^n\left( e_i + h_i\right) \\
+\text{s. t. } & y_i - \mathbf{w}' \mathbf{x}_i - b \leq \varepsilon + h_i \\
+ & y_i - \mathbf{w}' \mathbf{x}_i - b \geq \varepsilon + h_i
+\end{align}
+
+In this, context, variables $e_i$ have a different meaning than the defined for the classification model.
+
+If data cannot be estimated well with a linear function, we can use **kernels** to define new sets of features, similarly to SVM for classification.
+
+# An example of support vector regression
+
+To illustrate support vector regression, we will replicate the toy example from Alexander Kowalczyk:
+
+https://www.svm-tutorial.com/2014/10/support-vector-regression-r/
+
+```{r}
+df <- data.frame(x=1:20, y=c(3,4,8,4,6, 9,8,12,15,26, 35,40,45,54,49, 59,60,62,63,68))  
+```
+
+First, we try to predict `y` with `x` with a linear model:
+
+```{r}
+lr <- lm(y ~ x, df)
+df$lr <-  predict(lr, df)
+lr_fit <- postResample(df$lr, df$y)
+```
+
+We use the `svm` function from `e1071` to predict `y` with a SVR model. Function `svm` is working here with its default settings: a polynomial kernel of degree 3.
+
+```{r}
+svr <- svm(y ~ x, df)
+df$svm <- predict(svr, df)
+svr_fit <- postResample(df$svm, df$y)
+```
+
+We see that the SVR predicts better `y` than the linear model. Let's see why:
+
+```{r}
+pivot_longer(df, -x, names_to = "type", values_to = "value") %>% ggplot(aes(x, value, col=type, group=type)) + 
+  geom_point(aes(shape=type, color=type)) +
+  theme_bw() +
+  scale_shape_manual(name="values", values=c(3, 3, 16), labels=c("pred. lm", "pred. svr", "y")) +
+  scale_color_manual(name="values", values=c("#0000FF", "#FF0000", "#000000"), labels=c("pred. lm", "pred. svr", "y"))
+```
+
+While the linear model fits data with a straight line (blue crosses), the SVR model includes powers of `x` to fit data better (red crosses).
+

@@ -1,0 +1,343 @@
+---
+title: "Classifying with support vector machines"
+author: "Jose M Sallan"
+date: "29/04/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Support vector machines
+
+Support vector machines (SVM) are a supervised learning technique, intended originally for classification but later extended to numerical prediction problems. The strategy followed by SVMs can be summarized in two points:
+
+* Try to separate elements of each class with a **discriminant hyperplane**.
+* There may be datasets where the boundary between two classes is nonlinear. In this case, we can define new features using a **kernel trick**, that can define a new set of features where the classes are linearly separable.
+
+The use of the kernel trick in SVMs introduces the possibility of defining new features to classify the observations. For that reason, SVMs are sometimes considered a **black box method**, together with neural networks.
+
+# Defining the discriminant hyperplane
+
+Let's consider a binary classification problem, where each training observation has *p* features encoded in a vector $\mathbf{x}_i$ and a target variable that assigns the observation to one of the two categories. We will try to define a *p-1* dimensional hyperplane $\mathbf{w}'\mathbf{x} + b = 0$ that separates observations of both categories. For observations of one of the categories  $\mathbf{w}'\mathbf{x} + b > 0$, and for observations of the other $\mathbf{w}'\mathbf{x} + b < 0$.
+
+## Hard margin
+
+Of all possible discriminant hyperplanes, we want to choose the more robust to training data perturbations, and to variability of test or production data. This means that we want it to be as far as possible from observations of both classes. The weights of the resulting hyperplane will be re-scaled so that:
+
+* $\mathbf{w}'\mathbf{x}_i + b \geq 1$ for observations $i$ belonging to the first category.
+* $\mathbf{w}'\mathbf{x}_i + b \leq -1$ for observations $i$ belonging to the second category.
+
+If we assign labels $y_i = 1$ to observations of the first category and $y_i=-1$ to the second, we can collapse both conditions into:
+
+\[ y_i \left( \mathbf{w}'\mathbf{x}_i + b \right) \geq 1 \]
+
+The plane that is as far as possible from both categories will be obtained with the following optimization program:
+
+\begin{align}
+\text{MIN } & \lvert \lvert \mathbf{w} \lvert \lvert_2^2 \\
+\text{s. t. } &  y_i \left( \mathbf{w}'\mathbf{x}_i + b \right) \geq 1
+\end{align}
+
+This formulation requires that all observations fall in the right side of the plane. This is possible only if the data is **linearly separable**.
+
+## Soft margin
+
+Most datasets will not be linearly separable, meaning that some observations will fall on the wrong side of the hyperplane. To account for this, we define for each observation the **excess** or **hinge loss**:
+
+\[e_i = \text{MAX} \left\{  0, 1 - y_i \left( \mathbf{w}'\mathbf{x}_i + b \right) \right\}\]
+
+With this variable, we can define the soft margin formulation:
+
+\begin{align}
+\text{MIN } & \lvert \lvert \mathbf{w} \lvert \lvert_2^2 + C \sum_{i=1}^n e_i\\
+\text{s. t. } &  y_i \left( \mathbf{w}'\mathbf{x}_i + b \right) \geq 1 - e_i
+\end{align}
+
+The parameter $C$ controls the tradeoff between increasing margin size and ensuring that observations lie in the right side of the hyperplane.
+
+## A toy example
+
+Let's define a binary classification task for the well-know `iris` dataset, in which we will try to determine if an observation belongs to the `setosa` category of `Species`. We will use the sepal-related variables, so we will change their names for ease of use:
+
+```{r, message=FALSE}
+library(tidyverse)
+iris <- iris %>% rename("length" = "Sepal.Length" , "width" = "Sepal.Width") %>% mutate(setosa =as.factor(ifelse(Species=="setosa", "yes", "no")))
+```
+
+We will use the `svm` function of the `e1071` package to train a support vector machine learner for this task. We set the $C$ parameter to 100.
+
+```{r}
+library(e1071)
+svm_iris <- svm(setosa ~ width + length, data=iris, kernel="linear", cost=100)
+```
+
+The results of `svm_iris` can be summarized in the following plot. We have presented the variables `width` and `length` scaled (substracted the mean and divided by standard deviation). This scaling is performed automatically by `svm` function, so all variables have the same importance when defining the hyperplane.
+
+
+```{r, echo=FALSE, message=FALSE}
+iris_plot <- iris %>% mutate(scale_length=scale(length)[,1], scale_width=scale(width)[,1], index=1:n())
+
+index_setosa <- which(iris$Species == "setosa")
+index_nosetosa <- which(iris$Species != "setosa")
+svm_setosa <- svm_iris$index[which(svm_iris$index %in% index_setosa)]
+svm_nosetosa <- svm_iris$index[which(svm_iris$index %in% index_nosetosa)]
+
+colors <- rep(1, 150)
+colors[svm_setosa] <- 2
+colors[index_nosetosa] <- 3
+colors[svm_nosetosa] <- 4
+
+iris_plot <- iris_plot %>% mutate(colors=as.factor(colors))
+
+#coefficients of hyperplane
+line <- coef(svm_iris)
+line <- line/line[2]
+
+
+ggplot(iris_plot, aes(scale_length, scale_width, col=colors)) + geom_point(size=2) + theme_bw() + scale_color_manual(name="key", values=c("#99CCFF", "#0000FF", "#FF9999", "#FF0000"), labels=c("setosa", "setosa SV", "!setosa", "!setosa SV")) + geom_abline(intercept = -line[1], slope = - line[3])
+
+```
+
+As we have two features, the hyperplane has dimension one: it is the black line that separates perfectly both sets, represented in blue (setosa) and red (not setosa). The line depends exclusively on the observations that are closer to it, called **suport vectors**. In the plot the suport vectors (SV) are represented in bold color.
+
+To illustrate the effect of the $C$ parameter, let's examine the result of setting $C=1$:
+
+```{r, echo=FALSE}
+svm_iris0 <- svm(setosa ~ width + length, data=iris, kernel="linear", cost=1)
+
+svm_setosa <- svm_iris0$index[which(svm_iris0$index %in% index_setosa)]
+svm_nosetosa <- svm_iris$index0[which(svm_iris0$index %in% index_nosetosa)]
+
+colors0 <- rep(1, 150)
+colors0[svm_setosa] <- 2
+colors0[index_nosetosa] <- 3
+colors0[svm_nosetosa] <- 4
+
+iris_plot <- iris_plot %>% mutate(colors0=as.factor(colors0))
+
+#coefficients of hyperplane
+line0 <- coef(svm_iris0)
+line0 <- line0/line0[2]
+
+ggplot(iris_plot, aes(scale_length, scale_width, col=colors0)) + geom_point(size=2) + theme_bw() + scale_color_manual(name="key", values=c("#99CCFF", "#0000FF", "#FF9999", "#FF0000"), labels=c("setosa", "setosa SV", "!setosa", "!setosa SV")) + geom_abline(intercept = -line0[1], slope = - line0[3])
+
+```
+
+Now we obtain a model with smaller values of $\mathbf{w}$. The algorithm has used a larger set of support vectors for fitting this new model. That weights $\mathbf{w}$ are smaller can be a good thing, as leads to a less complex model, less prone to overfitting. But it is also a less precise model: it has classified inadequately one of the observations.
+
+# Least-squares support vector machines
+
+Least-squares support vector machines obtain the hyperplane with an alternative formulation of the quadratic optimization problem:
+
+\begin{align}
+\text{MIN } & \lvert \lvert \mathbf{w} \lvert \lvert_2^2 + \tau \sum_{i=1}^n e_i^2\\
+\text{s. t. } &  y_i \left( \mathbf{w}'\mathbf{x}_i + b \right) = 1 - e_i
+\end{align}
+
+In this formulation, values $e_i$ can be nonzero for all observations, so its interpretation is different from the original formulation of the support vector machines optimization problem. This formulation is equivalent to a ridge regression model with regularization parameter $\tau$ with target variables $y_i$ equal to +1 and -1 for first and second category, respectively.
+
+# Kernels
+
+The data of the `iris`-based model are **linearly separable**, as the boundary between both categories can be fairly approximated by a straight line. The algorithm would not work so well if this boundary were not linear. To apply support vector machines to problems with nonlinear boundaries between categories, we need to obtain a new seto of features where a linear boundary between the two classes exists. Let's see first how a **quadratic discriminant** helps us to find a linear boundary in a specific problem. Then, we will examine a more complex and generic strategy based on the **kernel trick**.
+
+## A quadratic discriminant
+
+In some cases, we can obtain a linear boundary adding a new variable. Let's consider the following dataset:
+
+```{r, echo=FALSE}
+circleFun <- function(center = c(0,0),diameter = 1, npoints = 100){
+  r = diameter / 2
+  tt <- seq(0,2*pi,length.out = npoints)
+  xx <- center[1] + r * cos(tt)
+  yy <- center[2] + r * sin(tt)
+  return(data.frame(x = xx, y = yy))
+}
+
+circle <- circleFun(diameter=2)
+
+n <- 500
+x <- runif(n, -1.5, 1.5)
+y <- runif(n, -1.5, 1.5)
+class <- as.factor(ifelse(x^2 + y^2 < 1, 1, 0))
+points <- data.frame(x=x, y=y, class=class)
+points %>% ggplot + 
+  geom_point(aes(x, y, col=class)) + 
+  scale_color_manual(values = c("#0000FF", "#FF0000"), labels=c("class 1", "class 2")) +
+  labs(color="classes") +
+  geom_path(data=circle, mapping=aes(x, y), col="#008000") +
+  theme_bw()
+```
+
+In this case, the boundary between classes is clearly nonlinear, as all observations belonging to class 2 (in red) lie within a circle of radius one. In this case, we can obtain a linear boundary defining a new variable $z$:
+
+\[ z= x^2 + y^2\]
+
+We have increased the complexity of the dataset, defining a new variable as a nonlinear function of the observable variables. But this new variable allows us to define a linear boundary. Let's examine $x$ versus the new variable $z$ (tye $y$ versus $z$ plot yields a similar result):
+
+```{r, echo=FALSE}
+points <- points %>% mutate(z = x^2 + y^2)
+
+points %>% ggplot(aes(x, z, col=class)) + 
+  geom_point() + 
+  scale_color_manual(values = c("#0000FF", "#FF0000"), labels=c("class 1", "class 2")) +
+  labs(color="classes") +
+  geom_hline(yintercept = 1, col="#008000") +
+  theme_bw()
+```
+
+## The kernel trick
+
+A more generic strategy to obtain features that allow finding a linear boundary is the **kernel trick**. This strategy consists in defining a kernel function $K \left(\mathbf{x}_i, \mathbf{x}_j \right)$ for each pair of observations $\left(i, j\right)$. Then, we express this function as the inner product of two vectors of features $\phi$ associated to $\mathbf{x}_i$ and $\mathbf{x}_j$:
+
+\[ K \left(\mathbf{x}_i, \mathbf{x}_j \right) = \langle \phi\left( \mathbf{x}_i \right), \phi\left(\mathbf{x}_j \right) \rangle \]
+
+Let's see how the kernel trick works with a polynomial kernel function for two two-dimensional features $\mathbf{a} = \left( a_1, a_2\right)$ and $\mathbf{b} = \left( b_1, b_2\right)$.
+
+The kernel function is:
+
+\[ K \left(\mathbf{a}, \mathbf{b} \right) = \left( \mathbf{a}' \mathbf{b}\right)^2  \]
+
+Doing some algebra we have that:
+
+\[K \left(\mathbf{a}, \mathbf{b} \right) = a_1^2b_1^2 + 2a_1b_1a_2b_2 + a_2^2b_2^2 \]
+
+This is equal to the inner product of the features:
+
+\begin{align}
+\phi\left( \mathbf{a} \right) &= \left( a_1^2, \sqrt{2}a_1a_2, a_2^2 \right) &
+\phi\left( \mathbf{b} \right) &= \left( b_1^2, \sqrt{2}b_1b_2, b_2^2 \right)
+\end{align}
+
+## Linear and polynomial kernels
+
+When we do not transform the original features, as in the example with the `iris` dataset, we say that we use the **linear kernel**. The example we have just presented is an application of the more generic **polynomial kernel**.
+
+The polynomial kernel function of degree $d$ is:
+
+\[ K \left(\mathbf{x}_i, \mathbf{x}_j \right) = \left( \gamma\mathbf{x}_i'\mathbf{x}_j  + \mu\right)^d \]
+
+The $\mu > 0$ parameter trades off the influence of higer-order versus lower-order features. Polynomial kernels with $\mu=0$ are called *homogeneous*. The case with $\mu=0$ and $d=1$ is the **linear kernel**, where we make no transformation of the variables.
+
+The polynomial kernel is popular in the field of natural language processing.
+
+This plot presents the behaviour of a linear kernel in the binary classification problem of the `iris` dataset. For the values shaded in red the classifyer predicts that the flower is `setosa`, and for the shaded in blue predicts that is not `setosa`.
+
+```{r, echo=FALSE}
+svm_iris_linear <- svm(setosa ~ scale_width + scale_length, data=iris_plot, kernel="linear")
+
+svm_iris_radial <- svm(setosa ~ scale_width + scale_length, data=iris_plot, kernel="radial")
+
+svm_iris_sigmoid <- svm(setosa ~ scale_width + scale_length, data=iris_plot, kernel="sigmoid")
+
+iris_tile <- expand.grid(scale_length=seq(-2, 2.8, 0.05), scale_width=seq(-2.5, 3.5, 0.05))
+
+iris_tile <- iris_tile %>% mutate(linear=predict(svm_iris_linear, iris_tile), radial=predict(svm_iris_radial, iris_tile), sigmoid=predict(svm_iris_sigmoid, iris_tile))
+
+ggplot(iris_plot) +
+  geom_point(aes(scale_length, scale_width, col=setosa), size=2, show.legend = FALSE) +
+  theme_minimal() +
+  scale_color_manual(values=c("#0000FF", "#FF0000")) +
+  xlim(-2, 2.8) + ylim(-2.5, 3.5) +
+  geom_tile(data=iris_tile, mapping=aes(scale_length, scale_width, fill=linear), show.legend = FALSE, alpha=0.5)+
+  scale_fill_manual(values = c("#99CCfF", "#FF9999")) + 
+  labs(title = "Linear kernel")
+```
+
+
+## Radial basis function kernel
+
+The **radial basis function (RBF)** of a pair of observations is:
+
+\[ K \left(\mathbf{x}_i, \mathbf{x}_j \right) = \text{exp} \left( - \gamma \lvert\lvert \mathbf{x}_i - \mathbf{x}_j \lvert\lvert^2 \right) \]
+
+The parameter $\gamma > 0$ is sometimes defined as:
+
+\[ \gamma = \frac{1}{2\sigma^2} \]
+
+The RBF function is a similarity measure, equal to one for $\mathbf{x}_i = \mathbf{x}_j$ and tending to zero for dissimilar observations. It is also a **Gaussian function**, with a shape similar to the normal distribution. So for each pair of observations, the radial kernel function evolves similarly to the right-hand side of a normal distribution.
+
+The radial basis has an infinite number of features, so practical implementations use an approximation of this function.
+
+This is the behaviour of the radial kernel on the binary classification problem on the `iris` dataset.
+
+```{r}
+ggplot(iris_plot) +
+  geom_point(aes(scale_length, scale_width, col=setosa), size=2, show.legend = FALSE) +
+  theme_minimal() +
+  scale_color_manual(values=c("#0000FF", "#FF0000")) +
+  xlim(-2, 2.8) + ylim(-2.5, 3.5) +
+  geom_tile(data=iris_tile, mapping=aes(scale_length, scale_width, fill=radial), show.legend = FALSE, alpha=0.5)+
+  scale_fill_manual(values = c("#99CCfF", "#FF9999")) +
+labs(title = "Radial kernel")
+```
+
+
+## Sigmoid kernel
+
+While the radial basis is based on a Gaussian function, the **sigmoid kernel** is based on the **hyperbolic tangent**:
+
+\[ K \left(\mathbf{x}_i, \mathbf{x}_j \right) = \text{tanh} \left( - \gamma \lvert\lvert \mathbf{x}_i - \mathbf{x}_j \lvert\lvert^2 \right) \]
+
+As we use the positive values of the hyperbolic tangent, the values of the kernel range between zero for similar observations and tend to one for dissimilar observations. So it has a behaviour opposite to the radial basis function.
+
+This is the strange behaviour of the sigmoid kernel on the binary classification `iris` problem.
+
+```{r}
+ggplot(iris_plot) +
+  geom_point(aes(scale_length, scale_width, col=setosa), size=2, show.legend = FALSE) +
+  theme_minimal() +
+  scale_color_manual(values=c("#0000FF", "#FF0000")) +
+  xlim(-2, 2.8) + ylim(-2.5, 3.5) +
+  geom_tile(data=iris_tile, mapping=aes(scale_length, scale_width, fill=sigmoid), show.legend = FALSE, alpha=0.5)+
+  scale_fill_manual(values = c("#99CCfF", "#FF9999")) +
+labs(title = "Sigmoid kernel")
+```
+
+## String kernels
+
+Other use of kernels is to obtain numerical features for problems with non-numerical representations. Examples of these problems are spam detection, text mining of gene analysis. String kernels are a measure of text similarity: the more similar two strings are the higher the value of the string kernel function will be.
+
+# Support vector machines in R
+
+The manual of the caret package lists some of the possiblities of implementing support vector machines in R:
+
+https://topepo.github.io/caret/train-models-by-tag.html#support-vector-machines
+
+These implementations allow solving classification and numerical predicition problems using support vector machines.
+
+## The `svm` function of the `e1071` package
+
+A straight implementation of support vector machines is the `svm` function of the `e1071` package. Some straight implementations of this function are:
+
+```{r, eval=FALSE}
+svm_iris_linear <- svm(setosa ~ scale_width + scale_length, data=iris_plot, kernel="linear")
+
+svm_iris_radial <- svm(setosa ~ scale_width + scale_length, data=iris_plot, kernel="radial")
+
+svm_iris_sigmoid <- svm(setosa ~ scale_width + scale_length, data=iris_plot, kernel="sigmoid")
+```
+
+The `svm` function allows controlling several tuning parameters:
+
+* `cost` the $C$ parameter for cost of hinge loss function.f
+* `degree` the $d$ parameter of polynomial kernels (defaults to 3).
+* `gamma` the $\gamma$ parameter of polynomial, radial and sigmoid kernels. Defaults to the inverse of number of features.
+* `coef0` the $\mu$ parameter of polynomial, radial and sigmoid kernels. Defaults to zero.
+
+## The `ksvm` function of `kernlab` package
+
+A more powerful implementation of support vector machines is the `ksvm` function of the `kernlab` package. Many of its methods are embedded in the `caret` package.
+
+```{r, message=FALSE, echo=FALSE}
+library(kableExtra)
+svm_methods <- data.frame(kernel=c("linear", "polynomial", "radial"), svm=c("`svmLinear`", "`svmPoly`", "`svmRadial`"), `least squares svm`=c("`lssvmLinear`", "`lsssvmPoly`", "`lssvmRadial`"))
+svm_methods %>% kable() %>% kable_styling()
+```
+
+We will examine the implementation of support vector machines for classification in R with more detail in the **Training svm with `caret`** vignette.

@@ -1,0 +1,138 @@
+---
+title: "Training and tuning SVM"
+author: "Jose M Sallan"
+date: "04/05/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE}
+library(tidyverse)
+library(caret)
+library(e1071)
+library(BAdatasets)
+```
+
+
+# A classification problem with `WineQuality`
+
+Let's define a classification problem with the `WineQuality` dataset, accesible through the `BAdatasets` package. We'll pick the dataset of red wines, and define a `good` variable defining good wines with `quality` equal or higher than 6 and bad otherwise. We'll pick 80% of the dataset as train set.
+
+```{r}
+red <- WineQuality$red
+
+red <- red %>% mutate(good = as.factor(ifelse(quality >= 6, 1, 0)))
+red <- red %>% select(-quality)
+levels(red$good) <- c("bad", "good")
+
+set.seed(2020)
+inTrain <- createDataPartition(red$good, p=0.8, list = FALSE)
+red_train <- red %>% slice(inTrain)
+red_test <- red %>% slice(-inTrain)
+
+red_train <- data.frame(red_train)
+red_test <- data.frame(red_test)
+```
+
+For obtaining accuracy, we'll use cross-validation with 5 folders.
+
+```{r}
+ control <- trainControl(method = "cv", number = 5)
+```
+
+# Classification benchmarks
+
+We'll use two classification algorithms as benchmarks for the `svm` implementation of support vector machines (SVM).
+
+```{r}
+set.seed(2020)
+c50 <- train(red_train %>% select(-good), red_train$good,
+                 method = "C5.0", 
+                 trControl = control, tuneGrid = expand.grid(model=c("rules", "tree"), winnow=c(TRUE, FALSE), trials=c(10, 20)))
+
+set.seed(2020)
+rf <- train(good ~ ., red_train,
+                method = "rf", 
+                trControl = control, tuneLength = 7, ntree=100)
+
+```
+
+Let's check accuracy values:
+
+```{r}
+models01 <- list(c50=c50, rf=rf)
+resamps01 <- resamples(models01)
+ggplot(resamps01, models=resamps01$models, metric="Accuracy")
+```
+
+# Support vector machines with `e1071`
+
+Let's run some SVM models with the `svm` function of the `e1071` package.
+
+```{r}
+svm_linear <- svm(good ~ ., red_train, kernel="linear")
+svm_poly <- svm(good ~ ., red_train, kernel="poly")
+svm_radial <- svm(good ~ ., red_train, kernel="radial")
+```
+
+Let's examine the values of accuracy for the obtained models.
+
+```{r}
+postResample(svm_linear$fitted, red_train$good)
+postResample(svm_poly$fitted, red_train$good)
+postResample(svm_radial$fitted, red_train$good)
+```
+
+The values of accuracy are on a similar range than the benchmark models. Let's see if we can improve performance using `caret` for model tuning.
+
+# Tuning SVM models with caret
+
+Many of the methods available for SVM with `caret` come from the `kernlab` package. Let's start tuning a linear SVM model with several values of the cost `C` parameter.
+
+```{r}
+set.seed(2020)
+svm_linear_caret <- train(good ~ ., red_train, method="svmLinear", trControl = control, tuneGrid=expand.grid(C=seq(0.25, 2, 0.25)))
+plot(svm_linear_caret)
+```
+
+I have set a seed for random numbers as the best choice can experiment significant variations, altough the range of improvement of accuracy is small. The value of accuracy is similar to the obtained for the linear kernel with the `svm` function.
+
+Let's train a polynomial model. In this model I have fixed the `scale` parameter equal to the inverse of number of features, as different values lead to problematic results.
+
+```{r}
+set.seed(2020)
+svm_poly_caret <- train(good ~ ., red_train, method="svmPoly", trControl = control, tuneGrid=expand.grid(C=seq(0.25, 2, 0.25), degree=2:4, scale=1/11))
+plot(svm_poly_caret)
+```
+
+And let's train finally a radial model:
+
+```{r}
+set.seed(2020)
+svm_radial_caret <- train(good ~ ., red_train, method="svmRadial", trControl = control, tuneGrid=expand.grid(C=seq(0.25, 2, 0.25), sigma=seq(0.1, 0.4, 0.1)))
+plot(svm_radial_caret)
+```
+
+Among the trained SVM models, the radial is the one that seems to have best results.
+
+# Comparing performance on the test set
+
+Let's compare the performance of `svm_radial` and `logitboost` models:
+
+```{r}
+test_rf <- predict(rf, red_test)
+confusionMatrix(test_rf, red_test$good)
+test_svm_radial <- predict(svm_radial_caret, red_test)
+confusionMatrix(test_svm_radial, red_test$good)
+```
+
+The random forests implementation is still the better classifyer for this task, but the SVM implementation has also a good performance on the test set.
+
+
