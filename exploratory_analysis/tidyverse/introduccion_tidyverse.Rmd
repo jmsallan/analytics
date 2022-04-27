@@ -1,0 +1,531 @@
+---
+title: "Introducción a tidyverse"
+author: "Jose M Sallan"
+date: 'MBA en Business Analytics'
+output: slidy_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(kableExtra)
+```
+
+## El tidyverse
+
+```{r, fig.align='center', out.width= '40%', fig.cap="https://tidyverse.org"}
+knitr::include_graphics("image/tidyverse.png")
+```
+
+## Tidyverse básico
+
+```{r, fig.align='center', out.width= '10%', fig.cap="Visualizando con ggplot"}
+knitr::include_graphics("image/ggplot2.png")
+```
+
+
+```{r, fig.align='center', out.width= '10%', fig.cap="Manipulación de datos con dplyr"}
+knitr::include_graphics("image/dplyr.png")
+```
+
+## Tidyverse básico
+
+```{r, fig.align='center', out.width= '10%', fig.cap="Leyendo .csv con readr"}
+knitr::include_graphics("image/readr.png")
+```
+
+```{r, fig.align='center', out.width= '10%', fig.cap="Leyendo Excel con readxl"}
+knitr::include_graphics("image/readxl.png")
+```
+
+## Tidyverse básico
+
+```{r, fig.align='center', out.width= '10%', fig.cap="Transformación de tablas con tidyr"}
+knitr::include_graphics("image/tidyr.png")
+```
+
+```{r, fig.align='center', out.width= '10%', fig.cap="Comunicando resultados con rmarkdown"}
+knitr::include_graphics("image/rmarkdown.png")
+```
+
+
+## Referencias
+
+* Libro online (EN): <https://r4ds.had.co.nz/>
+* Libro online (ES): <https://es.r4ds.hadley.nz/>
+* RStudio cheatsheets: <https://rstudio.com/resources/cheatsheets/>
+* Página web de tidyverse: <https://www.tidyverse.org/>
+
+Cargamos `tidyverse` haciendo:
+
+```{r, message=FALSE, echo=TRUE}
+library(tidyverse)
+```
+
+# Visualizaciones con ggplot
+
+## Visualizaciones con ggplot
+
+```{r, fig.align='center', out.width= '10%', fig.cap="Visualizing with ggplot"}
+knitr::include_graphics("image/ggplot2.png")
+```
+
+`ggplot2` crea gráficos con la **gramática de gráficos**:
+
+* `data`: datos en forma tabular.
+* `mapping`: variables a mostrar.
+* `geom`: gráfico a mostrar.
+
+## Los datos iris
+
+Los famosos datos `iris` de Fisher o Anderson recogen las medidas en centímetros de la longitud (*length*) y anchura (*width*) de los sépalos (*sepal*) y pétalos (*petal*) de 50  flores de cada una de las tres especies de iris: *setosa*, *versicolor* and *virginica*.
+
+```{r, echo=TRUE}
+head(iris)
+```
+
+## Dos variables contínuas
+
+¿Cómo podemos representar la relación entre `Sepal.Length` y `Sepal.Width`?
+
+Creemos un **gráfico de dispersión** con` geom_point()`:
+
+```{r, fig.align='center', out.width='60%', echo=TRUE}
+ggplot(data = iris, mapping = aes(Sepal.Length, Sepal.Width)) +
+  geom_point()
+```
+
+## Añadiendo una línea de tendencia
+
+Añadimos `geom_smooth()` para añadir una línea de tendencia.
+
+```{r, fig.align='center', out.width='60%', echo=TRUE}
+ggplot(data = iris, mapping = aes(Sepal.Length, Sepal.Width)) +
+  geom_point() +
+  geom_smooth()
+```
+
+## Variables categóricas
+
+Podemos asignar un color a cada categoría (especie) haciendo `color = Species` en `mapping`:
+
+```{r, fig.align='center', out.width='60%', echo=TRUE}
+ggplot(data = iris, mapping = aes(Sepal.Length, Sepal.Width, col = Species)) +
+  geom_point()
+```
+
+`color` no define qué colores usamos, sino la información que transmitimos usando color.
+
+## Variables categóricas
+
+Definamos una línea de regresión para cada categoría con `geom_smooth(method = "lm")`
+
+```{r, fig.align='center', out.width='60%', echo=TRUE}
+ggplot(data = iris, mapping = aes(Sepal.Length, Sepal.Width, col = Species)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+## Gráfico en facetas
+
+En vez de usar color, podemos definir un gráfico en facetas.
+
+```{r, fig.align='center', out.width='70%', echo=TRUE}
+ggplot(data = iris, mapping = aes(Sepal.Length, Sepal.Width)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  facet_grid(. ~ Species)
+```
+
+## Variables continuas por categoría
+
+¿Cómo se comporta `Sepal.Length` para cada `Species`?
+
+Podemos usar un **boxplot**:
+
+```{r, fig.align='center', out.width='80%'}
+knitr::include_graphics("image/Boxplot.png")
+```
+
+## Boxplots para cada categoría
+
+```{r, fig.align='center', out.width='60%', echo=TRUE}
+ggplot(data = iris, mapping = aes(Species, Sepal.Length)) +
+  geom_boxplot(fill = c("#FF9933", "#6666FF", "#B2FF66"))
+```
+
+Más colores en: <https://www.rapidtables.com/web/color/RGB_Color.html>
+
+## Medidas de posición
+
+```{r, fig.align='center', out.width='60%', echo=TRUE}
+ggplot(data = iris, mapping = aes(Species, Sepal.Length)) +
+  stat_summary(fun.min = min, fun.max = max, fun = median)
+```
+
+## Los datos mtcars
+
+`mtcars` procede de la edición de 1974 de la revista *Motor Trend US*, e incluye consumo de combustible y diez aspectos de diseño y desempeño para 32 automóviles.
+
+```{r, echo=TRUE}
+head(mtcars)
+```
+
+## Una Variable categóricas
+
+¿Cuántos modelos tienen motores de cada uno de los valores de número de cilindros `cyl`?
+
+Transformamos `cyl` de entera a categórica para hacer un gráfico de barras con `geom_bar()`.
+
+```{r, fig.align='center', out.width='60%', echo=TRUE}
+ggplot(mtcars, aes(factor(cyl))) +
+  geom_bar()
+```
+
+Para crear el gráfico, `geom_bar()` cuenta el número de observaciones en cada categoría.
+
+## Dos variables categóricas
+
+¿Cuántos modelos de cada número de cilindros tiene cambio automático o manual?
+
+```{r, fig.align='center', out.width='60%', echo=TRUE}
+ggplot(mtcars, aes(factor(cyl), fill = factor(am))) +
+  geom_bar()
+```
+
+## Dos variables categóricas
+
+¿Cuántos modelos de cada número de cilindros tiene cambio automático o manual?
+
+
+```{r, fig.align='center', out.width='60%', echo=TRUE}
+ggplot(mtcars, aes(factor(cyl), fill = factor(am))) +
+  geom_bar(position = "dodge")
+```
+
+## Una variable contínua
+
+Volvamos a `iris`: ¿Cuál es la distribución de `Sepal.Length`?
+
+Podemos visualizarlas con **histogramas** o **gráficos de densidad**.
+
+## Histograma
+
+Generamos histograma con `geom_histogram(bins = 10)`. Hemos de especificar el número de barras con `bins`.
+
+```{r, fig.align='center', out.width='60%', echo=TRUE}
+ggplot(data = iris, mapping = aes(Sepal.Length)) +
+  geom_histogram(bins = 10)
+```
+
+## Histograma
+
+Refinando la estética:
+
+```{r, fig.align='center', out.width='60%', echo=TRUE}
+ggplot(data = iris, mapping = aes(Sepal.Length)) +
+  geom_histogram(bins = 10, fill = "#CCFFFF", color = "#808080")
+```
+
+`fill` y `color` no están en `mapping`, así que no estamos transmitiendo información adicional con el color.
+
+
+## Gráfico de densidad
+
+Generamos gráficos de densidad con `geom_density()`.
+
+```{r, fig.align='center', out.width='60%', echo=TRUE}
+ggplot(data = iris, mapping = aes(Sepal.Length)) +
+  geom_density()
+```
+
+# Manipulación de datos con dplyr
+
+## Manipulación de datos con dplyr
+
+```{r, fig.align='left', out.width= '15%'}
+knitr::include_graphics("image/dplyr.png")
+```
+
+Los verbos básicos de manipulación de datos:
+
+* `filter` para filtrar filas por valor.
+* `select` para seleccionar columnas.
+* `arrange` para ordenar tablas por una o varias variables.
+* `mutate` para añadir nuevas variables.
+* `summarise` para obtener valores resumen.
+
+## Tablas con tibble
+
+`tibble` es la versión de tidyverse del data frame.
+
+```{r, fig.align='left', out.width= '15%'}
+knitr::include_graphics("image/tibble.png")
+```
+
+```{r, echo=TRUE}
+iris <- tibble(iris)
+iris
+```
+
+## Filtrando por filas
+
+```{r, echo=TRUE}
+filter(iris, Sepal.Length >= 7.5)
+```
+
+## Filtrando por filas
+
+```{r, echo=TRUE}
+filter(iris, Sepal.Length >= 6.5, Species == "versicolor")
+```
+
+## Ordenando por valor
+
+To arrange means ordering by a colum or columns
+
+```{r, echo=TRUE}
+arrange(iris, Sepal.Length)
+```
+
+## Ordenando por valor
+
+Decreasing order:
+
+```{r, echo=TRUE}
+arrange(iris, -Sepal.Length)
+```
+
+## Ordenando por valor
+
+By two variables
+
+```{r, echo=TRUE}
+arrange(iris, Species, -Sepal.Length)
+```
+
+## Seleccionando columnas
+
+```{r, echo=TRUE}
+select(iris, Sepal.Length, Sepal.Width)
+```
+
+## Seleccionando columnas
+
+```{r, echo=TRUE}
+select(iris, -Species)
+```
+
+## Seleccionando columnas
+
+Usando `tidyselect`:
+
+```{r, echo=TRUE}
+select(iris, ends_with("Length"))
+```
+
+## Combinando verbos
+
+Para combinar verbos necesitaríamos variables auxiliares...
+
+```{r, echo=TRUE}
+aux <- filter(iris,  Sepal.Length >= 6.5, Species == "versicolor")
+select(aux, -Species)
+```
+
+## Combinando verbos con piping
+
+...pero en vez de eso podemos usar el operador de *piping*`%>%`
+
+```{r, echo=TRUE}
+iris %>%
+  filter(Sepal.Length >= 6.5, Species == "versicolor") %>%
+  select(-Species)
+```
+
+## Creando nuevas variables
+
+Creamos `iris_b` a partir de `iris`:
+
+* con una nueva variable `sepal` creada con `mutate`.
+* eliminando dos variables con `select`.
+
+```{r, echo=TRUE}
+iris_b <- iris %>%
+  mutate(sepal = Sepal.Length*Sepal.Width) %>%
+  select(-Petal.Length, -Petal.Width)
+iris_b
+```
+
+## Renombrando variables
+
+Renombramos variables haciendo `rename(nuevo nombre = nombre actual)`
+
+```{r, echo=TRUE}
+iris_b <- iris_b %>%
+  rename(sepal_length = Sepal.Length,
+         sepal_width = Sepal.Width)
+```
+
+## Obteniendo valores resumen
+
+Podemos obteer la media `mean` de `Sepal.Length` y `Sepal.Width`:
+
+```{r, echo=TRUE}
+iris %>%
+  summarise(msl = mean(Sepal.Length),
+            msw = mean(Sepal.Width))
+```
+
+La tabla resultante tiene una sola fila.
+
+## Obteniendo valores resumen
+
+Podemos obtener la media de todos los valores numéricos de `iris` con:
+
+* `where(is.numeric)` para seleccionar las variables numéricas.
+* `across` para aplicar una función a las columnas seleccionadas.
+
+```{r, echo=TRUE}
+iris %>%
+  summarise(across(where(is.numeric), mean))
+```
+
+## Valores resumen por grupos
+
+Podemos obtener valores resumen para cada uno de los valores de una o varias variables categóricas con `group_by`.
+
+Medias de las variables numéricas para cada valor de `Species`:
+
+```{r}
+iris %>%
+  group_by(Species) %>%
+  summarise(across(where(is.numeric), mean))
+```
+
+## Combinando manipulación de datos y visualización
+
+```{r, fig.align='center', out.width='60%', echo=TRUE}
+iris %>%
+  group_by(Species) %>%
+  summarise(msl = mean(Sepal.Length)) %>%
+  ggplot(aes(Species, msl)) +
+  geom_bar(stat = "identity")
+```
+
+Usamos `geom_bar` con `stat = "identity"` porque la altura de las barras es proporcional al valor de la variable.
+
+# Manipulación de tablas con tidyr
+
+## Datos ordenados
+
+`tidyverse` asume **datos ordenados (tidy)**:
+
+* Una columna para cada variable.
+* Una fila para cada observación.
+* Una celda para cada valor.
+
+`iris` and `mtcars` are examples of tidy data.
+
+## Datos no ordenados
+
+```{r, echo=TRUE}
+relig_income %>%
+  head()
+```
+
+## El paquete tidyr
+
+```{r, fig.align='left', out.width= '15%'}
+knitr::include_graphics("image/tidyr.png")
+```
+
+El paquete`tidyr` transforma tablas:
+
+* de ancha a larga con `pivot_longer`.
+* de larga a ancha con `pivot_wider`.
+
+Los ordenadores entienden tablas largas, los humanos leemos bien tablas anchas.
+
+## De ancha a larga
+
+```{r, echo=TRUE}
+relig_income %>%
+  pivot_longer(-religion,
+               names_to = "income",
+               values_to = "count")
+```
+
+## De larga a ancha
+
+`fish_encounters` presenta información sobre peces nadando a lo largo de las estaciones de un río. Cada estación monitoriza de manera independiente si un determinado pez ha sido visto en la estación.
+
+```{r, echo=TRUE}
+fish_encounters
+```
+
+No todas las combinaciones de peces y estaciones están presentes en la tabla.
+
+## De larga a ancha
+
+Usamos `values_fill = list(seen = 0)` para fijar igual a cero valores no presentes en la tabla larga.
+
+```{r, echo=TRUE}
+fish_encounters %>%
+  pivot_wider(values_from = "seen",
+              names_from = "station",
+              values_fill = list(seen = 0))
+```
+
+# Leyendo archivos con readr y readxl
+
+## Leyendo archivos csv con readr
+
+```{r, fig.align='left', out.width= '15%'}
+knitr::include_graphics("image/readr.png")
+```
+
+Funciones para leer archivos desde tidyverse.
+
+```{r}
+files_df <- data.frame(lectura = c("`read_delim`", "`read_table`", "`read_tsv`", "`read_csv`", "`read_csv2`"),
+                       escritura = c("`write_delim`", "", "`write_tsv`", "`write_csv`", "`write_csv2`"),
+                       archivos = c("delimitador genérico" ,"espacios en blanco", "separados por tabulador", "archivos `.csv` (EN)", "archivos `.csv` (ES)"))
+
+files_df %>%
+  kbl() %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE, position = "center")
+```
+
+
+## Leyendo archivos Excel con readxl
+
+Instalamos `readxl` haciendo:
+
+```{r, echo=TRUE, eval=FALSE}
+install.packages("readxl")
+```
+
+```{r, fig.align='left', out.width= '15%'}
+knitr::include_graphics("image/readxl.png")
+```
+
+Función `read_excel()` para leer archivos Excel.
+
+# Otros paquetes del tidyverse
+
+## Otros paquetes del tidyverse
+
+```{r fig.align='center', out.width= '10%', fig.cap="Herramientas para variables categóricas"}
+knitr::include_graphics("image/forcats.png")
+```
+
+
+```{r fig.align='center', out.width= '10%', fig.cap="Herramientas para cadenas de caracteres"}
+knitr::include_graphics("image/stringr.png")
+```
+
+
+```{r fig.align='center', out.width= '10%', fig.cap="Programación funcional"}
+knitr::include_graphics("image/purrr.png")
+```
+
